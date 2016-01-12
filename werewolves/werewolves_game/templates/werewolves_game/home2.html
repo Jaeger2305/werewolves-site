@@ -1,0 +1,71 @@
+   {% load static swampdragon_tags %}
+    <!DOCTYPE html>
+    <html>
+    <head lang="en">
+        <meta charset="UTF-8">
+        <title></title>
+    </head>
+    <body>
+
+    <h1>Notifications demo</h1>
+
+    <!-- This is our list of notifications -->
+    <ul id="notifications">
+        {% for notification in object_list %}
+        <li>{{ notification.message }}</li>
+        {% endfor %}
+    </ul>
+
+
+    <!-- SwampDragon -->
+	{% swampdragon_settings %}
+
+	<script type="text/javascript" src="{% static 'swampdragon/js/dist/swampdragon.min.js' %}"></script>
+	<script type="text/javascript" src="{% static 'swampdragon/js/dist/datamapper.js' %}"></script>
+
+    <!-- notifications -->
+    <script>
+		    // Ask the browser for permission to show notifications
+    // Taken from https://developer.mozilla.org/en-US/docs/Web/API/Notification/Using_Web_Notifications
+    window.addEventListener('load', function () {
+        Notification.requestPermission(function (status) {
+            // This allows to use Notification.permission with Chrome/Safari
+            if (Notification.permission !== status) {
+                Notification.permission = status;
+            }
+        });
+    });
+
+
+    // This is the list of notifications
+    var notificationsList = document.getElementById("notifications");	
+	
+	swampdragon.onChannelMessage(function (channels, message){
+		addNotification((message.data));
+	});
+	
+	swampdragon.ready(function(){
+		swampdragon.subscribe('notifications', 'notifications');
+	});
+
+    // Add new notifications
+    function addNotification(notification) {
+        // If we have permission to show browser notifications
+        // we can show the notifiaction
+        if (window.Notification && Notification.permission === "granted") {
+            new Notification(notification.message);
+        }
+
+        // Add the new notification
+        var li = document.createElement("li");
+        notificationsList.insertBefore(li, notificationsList.firstChild);
+        li.innerHTML = notification.message;
+
+        // Remove excess notifications
+        while (notificationsList.getElementsByTagName("li").length > 5) {
+            notificationsList.getElementsByTagName("li")[5].remove();
+        }
+    }
+	</script>
+    </body>
+    </html>

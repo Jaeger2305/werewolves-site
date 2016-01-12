@@ -1,0 +1,51 @@
+li a {
+    color: green;
+}
+
+html {
+    background: white url("../images/BG.jpg") no-repeat right bottom;
+	color:white;
+	height:100%;
+	width:100%;
+}
+
+h1{
+	color:red;
+}
+
+#player_list{
+	width:600px;
+}
+#server_updates, #server_commands{}
+
+.general_container{
+	width:70%;
+	height:200px;
+	border:black thick solid;
+	border-radius:5px;
+	margin:30px;
+	padding:20px;
+	background:black;
+	font-size:16px;
+	color:yellow;
+	opacity:0.8;
+	overflow:auto;
+	position:relative;
+}
+
+#send_command, #quick_match{
+	background:orange;
+	color:white;
+	padding:5px;
+	margin:5px;
+	display:inline-block;
+	border-radius:5px;
+	position:relative;
+	left:0px;
+	bottom: 40px;
+}
+
+.message{
+	display:block;
+}
+}

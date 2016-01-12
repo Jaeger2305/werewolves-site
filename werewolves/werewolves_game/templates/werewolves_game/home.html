@@ -1,0 +1,7 @@
+{% load staticfiles %}
+
+<link rel="stylesheet" type="text/css" href="{% static 'werewolves_game/stylesheets/style.css' %}" />
+
+<h1>Werewolves the game</h1>
+
+{% if response %}<p><strong>{{ response }}</strong></p>{% endif %}

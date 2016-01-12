@@ -1,0 +1,65 @@
+{% load static swampdragon_tags %}
+
+<!DOCTYPE html>
+<html ng-app="LobbyApp">
+
+<link rel="stylesheet" type="text/css" href="{% static 'werewolves_game/stylesheets/style.css' %}" />
+
+<style>
+#player_list{
+	width:600px;
+}
+#server_updates, #server_commands{
+	width:70%;
+	height:200px;
+	border:black thick solid;
+	border-radius:5px;
+	margin:30px;
+	padding:20px;
+	background:black;
+	font-size:26px;
+	color:yellow;
+	opacity:0.8;
+	overflow:auto;
+}
+</style>
+
+
+<h1>Werewolves the game</h1>
+
+<table id="player_list">
+	<tr><td>Name</td><td>Allegiance</td></tr>
+</table>
+
+<div ng-controller="LobbyCtrl" id="server_updates">
+	{{ GameList.name }}
+</div>
+
+
+<div id="server_commands">
+
+</div>
+{% if response %}<p><strong>{{ response }}</strong></p>{% endif %}
+
+{% swampdragon_settings %}
+<script type="text/javascript" src="{% static 'swampdragon/js/dist/swampdragon.min.js' %}"></script>
+<script type="text/javascript" src="{% static 'swampdragon/js/dist/datamapper.js' %}"></script>
+
+<script>
+console.log("working");
+
+swampdragon.onChannelMessage(function(channels, message){
+	var container = document.getElementById("server_updates");
+	console.log(message.data);
+	container.innerText = message.data;
+	console.log("message received");
+});
+
+swampdragon.ready(function(){
+	swampdragon.subscribe('lobby', 'lobinfo', null);
+	console.log("subscribed");
+});
+
+</script>
+
+</html>
