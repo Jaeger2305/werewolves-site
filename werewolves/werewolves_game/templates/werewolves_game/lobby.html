@@ -60,6 +60,9 @@ swampdragon.onChannelMessage(function(channels, message){
 	if (message.data.channel === "player_list"){
 		console.log(message.data);
 	}
+	if (message.data.channel.startsWith("msg")){
+		console.log(message.data);
+	}
 	console.log(message.data.channel);
 });
 
@@ -71,16 +74,17 @@ swampdragon.ready(function(){
 	$("#send_command").on("click", function(){
 		var data_dict = {message: $("#server_commands").html(), time: $.now()};
 		var msg = $("#server_commands").val();
-		swampdragon.callRouter('pushMessage', 'lobby', {message: msg}, function(context, data){
-			console.log("message pushed locally: "+data.message);
+		swampdragon.callRouter('messaging', 'lobby', {'session_key':$('#sessionID').html(), msg: msg, groups:["games"]}, function(context, data){
+			console.log("message pushed locally: "+data);
 		});
 	});
 
 	$("#quick_match").on('click', function(){
 		swampdragon.callRouter('matchmaking', 'lobby', {'session_key':$('#sessionID').html(), 'action':'join_game'}, function(context, data){
+			swampdragon.subscribe('lobby', 'msg:game:'+data.g_id, {'output':'msg:game:'+data.g_id, 'g_id':data.g_id}, null, null);
 			console.log(data);
 			$('#server_updates').prepend("<span class='message'>"+data.text+": "+data.g_id+"</span>");
-			$('#sessionID').html(data.session_key);
+			$('#sessionID').html(data.session_key);		// unnecessary with DB backed sessions?
 		});
 	});
 
@@ -131,24 +135,23 @@ swampdragon.ready(function(){
 });
 
 <!-- Session -->
-function extend_session(){
-	$.ajax({
+function pulse_activity(callback){
+	return $.ajax({
 		url:  document.location.origin+"/werewolves_game/extend_session",
 		type: 'get',
-		success: function(data){
-			console.log(data);
-		},
-		failure: function(data){
-			alert("error");
-		},
+		data: {'session_key':$('#sessionID').html()},
+		success: callback,
 	});
-	console.log("done session extension");
-	window.setTimeout(extend_session, 15000);
 }
 
-//window.setTimeout(extend_session, 15000);
+function pulse_handler(){
+	pulse_activity(function(data){
+		//console.log("pulse_activity: "+data);
+		window.setTimeout(pulse_activity, 25000);
+	});
+}
 
-
+pulse_handler();
 
 </script>
 

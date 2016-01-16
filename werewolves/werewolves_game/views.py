@@ -1,9 +1,12 @@
-from django.http import HttpResponseRedirect, HttpResponse
+from django.http import HttpResponseRedirect, HttpResponse, JsonResponse
 from django.template import RequestContext, loader
 from django.core.urlresolvers import reverse
 from django.shortcuts import get_object_or_404, render
 
 from werewolves_game.server_scripting.game import *
+
+from django.conf import settings
+SessionStore = import_module(settings.SESSION_ENGINE).SessionStore
 
 import datetime
 
@@ -12,20 +15,26 @@ def home_view(request):
 
 def lobby_view(request):
     response = ""
-    import ipdb;ipdb.set_trace()
+
+    request.session['has_session'] = True		#without some kind of session modification it forgets it on refresh
     response = request.session.session_key
 
     return render(request, 'werewolves_game/lobby.html', {'response':response})
 
 def session_view(request):
-	#request.session.set_expiry(100)
+	session_key = request.GET.get("session_key", False)
+	if not session_key:
+		return
+
+	session = SessionStore(session_key=session_key)
 	
 	dt = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-	#request.session['last_activity'] = dt
-	return {
-		"response":"Session expiry updated",
-		"status":"success"
+	session['last_activity'] = dt
+	session.save()
+	payload =  {
+		"response":"Session expiry updated: "+str(session_key),
 	}
+	return JsonResponse(payload)
 
 
 from django.views.generic import ListView

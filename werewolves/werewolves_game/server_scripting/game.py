@@ -26,10 +26,11 @@
 	Class for handling sessions? all the data that can be held in a session, makes it easy for us to manipulate
 	And a debugging class that ties codes to messages?
 	Messaging class?
+
+	Variables should be privatised!!
 '''
 # If last player in game (ie players = 0), delete game from redis too
 # perhaps rename from/to_redis functions to serializers
-# may be some bug with appending names, the whole split/join thing is a little confusing.
 
 import redis
 import uuid
@@ -62,10 +63,11 @@ class Player:
 	status = ""
 	name = ""
 	session_data = None
+	g_id = ""
 
 	def __init__(self, key):
 		self.session_data = SessionStore(session_key=key)
-		log = open("logfile.txt", "a")
+
 		if 'p_id' in self.session_data.keys():
 			self.from_redis(self.session_data['p_id'])
 		else:
@@ -78,8 +80,6 @@ class Player:
 			self.session_data.save()
 
 			self.to_redis()
-			
-			log.write("sesh data in player init (self): "+str(self.session_data.items())+"\n")
 
 	def from_redis(self, p_id):
 		redis_player = ww_redis_db.hgetall("player_list:"+str(p_id))
@@ -139,11 +139,10 @@ class Player:
 
 	def find_game(self, **kwargs):
 		found_game = False
-		log = open("logfile.txt", "a")
-		log.write("kwargs in find_game (game.py): "+str(kwargs.items())+"\n")
 
 		if 'g_id' in self.session_data.keys():
-			return {'text':"already ingame"}
+			return {'text':"already ingame",
+					'g_id':self.session_data['g_id']}
 
 		result = {}		# for debug purposes, output in lobby template http://localhost:8000/werewolves_game/lobby/
 		result['text'] = ""
@@ -207,6 +206,20 @@ class Player:
 		result['session_key'] = self.session_data.session_key
 
 		return result
+
+	def push_message(self, **kwargs):
+		data_dict = {}
+
+		kwargs['groups'].insert(0,"msg")
+		kwargs['groups'].append(self.session_data['g_id'])
+
+		channel = (":").join(kwargs['groups'])
+
+		data_dict["message"] = kwargs['msg']
+		data_dict["channel"] = channel
+
+		publish_data(channel, data_dict)
+		return data_dict
 
 class Game:
 	g_id = 123

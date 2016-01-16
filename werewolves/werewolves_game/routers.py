@@ -18,6 +18,8 @@
     # c[ontinue]
     # <object>.TAB = list methods/properties
 
+    # this method doesn't work for ajax requests, but I guess you should KISS it anyway
+
     # can also writ to file if you have to
         #log = open('logfile.txt', 'a')
         #log.write(str(kwargs)+" are the kawrgs for get subscription channels\n")
@@ -25,19 +27,35 @@
 # overwrite the subscription method?
 # bug: using channel as a key in the data dict passed in a subscribe call results in an empty kwarg. Very confusing.
 
-# okay, user specific channels implemented. There are 3 aspects: subscribe to channel:id (javascript), publish to channel:id (game.py, publish_data()) and add the channel to the get_subscription_channels
-# get_subscription_channels seems to be called whenever a message is published to filter where it's sent. Depending on the kwargs sent (javascript in subscribe/callrouter) you can dynamically filter
+# okay, user specific channels implemented.
+    # There are 3 aspects:
+        # subscribe to channel:id (javascript),
+        # publish to channel:id (game.py, publish_data()) and
+        # add the channel to the get_subscription_channels list
+# get_subscription_channels is called whenever you subscribe and filters what channels you listen to.
+# You can add to the subscribed channels by using params in JS subscribe
+# Depending on the kwargs sent (javascript in subscribe/callrouter) you can dynamically filter
 
 # TODO
-# keep users and game players separate.
+# separate users and game players.
+# Write list of subscribed channels I want to listen to in .txt
+    # my game, the lobby, system messages, specific groups of players (werewolves/merlin etc), whispers
+# subscribe based on session data (to game, players etc)
+# unsubscribe functionality, ie. from channels when leaving game
+# implement timeout for users in games and for the games themselves
+    # ignore check_activity, I want the sessions to last 2 weeks, but we can cleanup based on differing times of session['latest activity']
 
+    
 # BUGS
-    # Sessions are just broken. Refreshing loses the session key. Have I imported somewhere I shouldn't? Perhaps SessionStore and request.session are conflicting. Restart may solve problem
+    # Extra sessions created unneccesarrily (try clicking check_session and check your cygwin)
+    # sending message while not in game results in null socket
+    # have to already be in game for subscription to work (ie click quick match twice)
+    # repeated clicking of send message loses effect
 
 # Sessions
-    # AJAX feeds lifepulse every 10 seconds from client
-    # this reaches the session_handler view, which is supposed to update the session with latest access time, and perhaps a session expiry data
-    # this will be complemented by a PCB at the bottom of game.py (check_activity) which is called through the session_handler router
+    # AJAX feeds lifepulse every 25 seconds from client
+    # this reaches the session_handler view, which updates the session with latest access time
+    # this is complemented by a PCB at the bottom of game.py (check_activity()) which is called through the session_handler router
         # the PCB cycles through all session data and deletes out of date ones, or alternatively a long time since the last life pulse
         # this is expensive, so I'm not sure if it's a good way of doing it
         # I could create a separate DB for players in game, and create a primary key for the sessions, then cycle through a JOIN table
@@ -53,10 +71,6 @@
 # handle connection if player closes browser/session ends
 # convert from PCB to celery/CRON jobs
 
-
-# join/leave games
-    # implemented sort of but not tested. Consider moving all the functions underneath the classes? Would be cleaner.
-# would be nice to have variables under the Router itself instead of faffing around on the functions
 
 # For Production:
     # using DB session store, needs to be cleared out regularly in production https://docs.djangoproject.com/en/1.9/ref/django-admin/#django-admin-clearsessions
@@ -96,7 +110,7 @@ class GameRouter(BaseRouter):
 
 class LobbyRouter(BaseRouter):
     route_name = 'lobby'
-    valid_verbs = BaseRouter.valid_verbs + ['session_handling', 'pushMessage', 'get_players', 'get_games_list', 'join_game', 'leave_game', 'matchmaking', 'messaging']
+    valid_verbs = BaseRouter.valid_verbs + ['messaging', 'session_handling', 'pushMessage', 'get_players', 'get_games_list', 'join_game', 'leave_game', 'matchmaking', 'messaging']
 
     # all published methods pass through this func, the returned array of strings are the channels the message is broadcast on.
     # defaults to first element (lobbyinfo)
@@ -105,9 +119,9 @@ class LobbyRouter(BaseRouter):
 
         if 'output' in kwargs:
             if kwargs['output'] == 'player_list':
-                log = open('logfile.txt', 'a')
-                log.write("found output: "+kwargs['g_id']+"\n")
                 return ['player_list:'+kwargs['g_id']]
+            elif kwargs['output'].startswith("msg:game"):
+                return ['msg:games:'+kwargs['g_id']]
 
         return ['lobbyinfo', 'playersInGame', 'sysmsg']
 
@@ -118,7 +132,6 @@ class LobbyRouter(BaseRouter):
         if 'action' not in kwargs.keys():
             return self.send({"error":"no action given"})
 
-        import ipdb;ipdb.set_trace()
         if kwargs['action'] == "delete":
             Session.objects.all().delete()
             return
@@ -144,6 +157,11 @@ class LobbyRouter(BaseRouter):
             response = "flushed!"
 
         self.send(response)
+
+    def messaging(self, **kwargs):
+        player = Player(kwargs['session_key'])
+        player.push_message(**kwargs)
+        self.send("hi")
 
     def pushMessage(self, **kwargs):
         push_system_message(kwargs["message"])
