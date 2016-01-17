@@ -62,22 +62,25 @@ class Player:
 	character_type = ""
 	status = ""
 	name = ""
-	session_data = None
+	session = None
+	session_key = ""
 	g_id = ""
 
 	def __init__(self, key):
-		self.session_data = SessionStore(session_key=key)
+		self.session = SessionStore(session_key=key)
+		self.session_key = key
 
-		if 'p_id' in self.session_data.keys():
-			self.from_redis(self.session_data['p_id'])
+		if 'p_id' in self.session.keys():
+			self.from_redis(self.session['p_id'])
 		else:
 			self.character_type = "werewolf"
 			self.status = "alive"
 			self.name = "Richard"
 			self.p_id = str(uuid.uuid4())
 
-			self.session_data['p_id'] = self.p_id
-			self.session_data.save()
+			#import ipdb;ipdb.set_trace()
+			self.session['p_id'] = self.p_id
+			self.session.save()
 
 			self.to_redis()
 
@@ -86,8 +89,6 @@ class Player:
 		redis_player = {k.decode('utf8'): v.decode('utf8') for k, v in redis_player.items()}
 
 		self.p_id = p_id
-		log = open("logfile.txt", "a")
-		log.write(str(p_id)+": the p_id from redis\n")
 		#self.name = redis_player['name']
 		return
 
@@ -96,33 +97,16 @@ class Player:
 
 	def leave_game(self, **kwargs):
 		result = {}
-		if 'g_id' in kwargs:
+
+		if 'g_id' in kwargs.keys():
 			game = Game(kwargs['g_id'])
-		elif 'g_id' in self.session_data.keys():
-			game = Game(self.session_data['g_id'])
-		else:
+		elif 'g_id' in self.session.keys():
+			game = Game(self.session['g_id'])
+		elif self.session['status'] == "outgame":
 			result['error'] = "Player not currently in a game."
 			return result
-		''' legacy
-		game = ww_redis_db.hgetall("g_list:"+g_id)
-		game = {k.decode('utf8'): v.decode('utf8') for k, v in game.items()}
-		
-		if 'players' not in game.players:
-			self.session_data.pop('g_id', None)
-			self.session_data.save()
-			result['error'] = "Game not found in redis"
-			return "g_list:"+g_id
-
-		players = game['players'].split('|')
-
-		if "player:"+self.p_id in players:
-			players.remove("player:"+self.p_id)
-			ww_redis_db.hset("g_list:"+g_id, "players", "|".join(players))
-			result['response'] = "Player removed from the game"
 		else:
-			self.session_data.pop('g_id', None)
-			result['error'] = "Player not found in provided game: "+str(game.items())
-		'''
+			result['error'] = "Game not found"
 
 		if 'player:'+self.p_id in game.players:
 			game.players.remove('player:'+self.p_id)
@@ -131,18 +115,21 @@ class Player:
 		else:
 			result['error'] = "Player not found in game: "+game.g_id
 		
-		if 'g_id' in self.session_data.keys():
-			self.session_data.pop('g_id', None)
-			self.session_data.save()
+		if 'g_id' in self.session.keys():
+			self.session['status'] = "outgame"
+			#self.session.pop('g_id', None)
+			self.session.save()
+
+		result['g_id'] = game.g_id
 
 		return result
 
 	def find_game(self, **kwargs):
 		found_game = False
 
-		if 'g_id' in self.session_data.keys():
+		if 'g_id' in self.session.keys() and 'status' in self.session.keys() and self.session['status'] == 'ingame':
 			return {'text':"already ingame",
-					'g_id':self.session_data['g_id']}
+					'g_id':self.session['g_id']}
 
 		result = {}		# for debug purposes, output in lobby template http://localhost:8000/werewolves_game/lobby/
 		result['text'] = ""
@@ -198,25 +185,33 @@ class Player:
 			# populate with members
 			result['text'] += ". Populated with AI."
 
-		self.session_data['g_id'] = g_id
-		self.session_data.save()
+		self.session['g_id'] = g_id
+		self.session['status'] = "ingame"
+		self.session.save()
 
-		result['g_id'] = self.session_data['g_id']
-		result['p_id'] = self.session_data['p_id']
-		result['session_key'] = self.session_data.session_key
+		result['g_id'] = self.session['g_id']
+		result['p_id'] = self.session['p_id']
 
 		return result
 
 	def push_message(self, **kwargs):
 		data_dict = {}
+		channel = ""
 
-		kwargs['groups'].insert(0,"msg")
-		kwargs['groups'].append(self.session_data['g_id'])
+		if 'msg' not in kwargs.keys() or 'groups' not in kwargs.keys():
+			return
 
-		channel = (":").join(kwargs['groups'])
+		if (	'game' in kwargs['groups'] and
+				'g_id' in self.session.keys() and
+				'status' in self.session.keys() and
+				self.session['status'] == "ingame"
+			):
+			channel = 'game:'+self.session['g_id']
+		elif 'player' in kwargs['groups'] and 'p_id' in kwargs.keys():
+			channel = 'player:'+kwargs['p_id']
 
-		data_dict["message"] = kwargs['msg']
-		data_dict["channel"] = channel
+		data_dict['message'] = kwargs['msg']
+		data_dict['channel'] = channel
 
 		publish_data(channel, data_dict)
 		return data_dict

@@ -16,13 +16,14 @@ def home_view(request):
 def lobby_view(request):
     response = ""
 
-    request.session['has_session'] = True		#without some kind of session modification it forgets it on refresh
+    request.session.save()
     response = request.session.session_key
 
     return render(request, 'werewolves_game/lobby.html', {'response':response})
 
 def session_view(request):
 	session_key = request.GET.get("session_key", False)
+	# print("session_view key: "+request.session.session_key) # this returns the same key, i originally thought it regenerated it for some reason
 	if not session_key:
 		return
 
