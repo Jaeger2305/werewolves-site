@@ -47,6 +47,8 @@
     # implement timeout for users in games and for the games themselves
         # ignore check_activity, I want the sessions to last 2 weeks, but can cleanup based on differing times of session['latest activity']
     # work out how to identify other players. Player ID's would need to be open, but I'd need to look up session data based on p_id :S
+    # work out how to trigger state changes independently
+    # read this awesome post http://mrjoes.github.io/2013/06/21/python-realtime.html
 
     # Currently working on game.py Player class
         # the plan is to move it all under the player object, it's not thoroughly tested though
@@ -55,13 +57,17 @@
         # set up inheritance and move session_data into user class
     # handle connection if player closes browser/session ends (started with the pulse_activity ajax)
     # convert from PCB to celery/CRON jobs
+    # perhaps add a redis_hander, which interfaces with the redis DB to search the keys in different ways (ie for empty games, inactive players)
+    # possible I add a flag to the objects, so at the end of a router, if the object's flag says update, I then save it to redis
+    # or I add custom redis saves that doesn't do the whole thing again. Still, not a lot for python to do to just serialise a relatively small object
+    # privatise variables
 
 # look into using swampdragon's session store? http://swampdragon.net/documentation/sessions/
 
 # player.status = ['ingame', 'kicked', 'searching', 'finished', 'outgame']
+# game.state = ['voting', 'lobby', 'discussion']
     
 # BUGS
-    # Joining/leaving games causes players in game to creep up. Probably something to do with the new status var in the session/
 
 # Sessions
     # AJAX feeds lifepulse every 25 seconds from client
@@ -182,42 +188,6 @@ class LobbyRouter(BaseRouter):
         player = Player(kwargs['session_key'])
         player.push_message(**kwargs)
         self.send("hi")
-
-    def pushMessage(self, **kwargs):
-        push_system_message(kwargs["message"])
-
-    def get_players(self, **kwargs):
-        broadcast_players(kwargs['g_id'])
-
-    def get_games_list(self, **kwargs):
-        broadcast_games()
-
-    def create_game(self, **kwargs):
-        return
-
-    def join_game(self, **kwargs):
-        session_data = SessionStore(session_key=kwargs['session_key'])
-        log.write("kwargs in routers:"+str(kwargs.items())+"\n")
-
-        player = Player(kwargs['session_key'])
-
-        response = player.find_game(**kwargs)
-        self.send(response)
-
-    def leave_game(self, **kwargs):
-        session_data = SessionStore(session_key=kwargs['session_key'])
-
-        session_data['fry'] = 'try'
-        session_data.save()
-        log = open("logfile.txt", "a")
-        log.write(str(session_data.values())+"\n"+str(session_data.session_key)+"\n")
-
-        if 'p_id' in session_data.keys():
-            log = open("logfile.txt", "a")
-            log.write("\nfound p_id in session\n"+session_data['p_id'])
-
-            myPlayer = Player(kwargs['session_key'])
-            self.send(myPlayer.leave_game())
 
 # register router
 route_handler.register(NotificationRouter)

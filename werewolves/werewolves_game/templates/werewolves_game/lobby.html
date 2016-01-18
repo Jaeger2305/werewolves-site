@@ -68,8 +68,7 @@ swampdragon.onChannelMessage(function(channels, message){
 });
 
 swampdragon.ready(function(){
-	//swampdragon.subscribe('lobby', 'lobinfo', {'session_key':$('#sessionID').html()}, null, null);
-	swampdragon.subscribe('lobby', 'sysmsg', {'session_key':$('#sessionID').html()}, null, null);
+	swampdragon.subscribe('lobby', 'default', {'session_key':$('#sessionID').html()}, null, null);
 	console.log("subscribed");
 
 	$("#send_command").on("click", function(){

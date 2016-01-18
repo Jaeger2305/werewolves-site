@@ -7,7 +7,7 @@
 	to modify the object data:
 		myObj = Object(id)
 		# do stuff...
-		myObj.to_redis()
+		myObj.save()
 
 	the individual functions are called from routers.py and either return information there, or broadcast it via PeriodicCallback()
 
@@ -30,7 +30,6 @@
 	Variables should be privatised!!
 '''
 # If last player in game (ie players = 0), delete game from redis too
-# perhaps rename from/to_redis functions to serializers
 
 import redis
 import uuid
@@ -71,7 +70,7 @@ class Player:
 		self.session_key = key
 
 		if 'p_id' in self.session.keys():
-			self.from_redis(self.session['p_id'])
+			self.load(self.session['p_id'])
 		else:
 			self.character_type = "werewolf"
 			self.status = "alive"
@@ -82,9 +81,9 @@ class Player:
 			self.session['p_id'] = self.p_id
 			self.session.save()
 
-			self.to_redis()
+			self.save()
 
-	def from_redis(self, p_id):
+	def load(self, p_id):
 		redis_player = ww_redis_db.hgetall("player_list:"+str(p_id))
 		redis_player = {k.decode('utf8'): v.decode('utf8') for k, v in redis_player.items()}
 
@@ -92,7 +91,7 @@ class Player:
 		#self.name = redis_player['name']
 		return
 
-	def to_redis(self):
+	def save(self):
 		ww_redis_db.hset("player_list:"+self.p_id, "name", self.name)		# save player to redis DB (see redis_util for more info)
 
 	def leave_game(self, **kwargs):
@@ -110,7 +109,7 @@ class Player:
 
 		if 'player:'+self.p_id in game.players:
 			game.players.remove('player:'+self.p_id)
-			game.to_redis()
+			game.save()
 			result['response'] = "Player removed from game"
 		else:
 			result['error'] = "Player not found in game: "+game.g_id
@@ -157,28 +156,26 @@ class Player:
 			else:
 				# find game with least spaces
 				for g_key in g_list:
-					game = ww_redis_db.hgetall(g_key)
-					game = {k.decode('utf8'): v.decode('utf8') for k, v in game.items()}	#convert from byte array to string dict
+					g_id = str(g_key.decode("utf-8")).split(":")[1]
+					game = Game(g_id)
+					if len(game.players) < 10:
+						game.add_player(self.p_id)
+						game.save()
 
-					players = game['players'].split("|")		# obtain players in current game in the form of player:uuid
-					if len(players) < 10: # join game Check not already in this game (Compare p_ids)
-						ww_redis_db.hset(g_key, "players", game['players']+"player:"+self.p_id+"|")
 						found_game = True
-						g_id = str(g_key.decode("utf-8")).split(":")[1]
-
 						result['text'] = "found most space game"
 						break
 
 		if not found_game:
 			# start new game
-			newGame = Game()
-			newGame.name = "mynewgame"
-			newGame.g_round = "1"
+			game = Game()
+			game.name = "mynewgame"
+			game.g_round = "1"
 			#newGame.players.append("player:"+self.p_id)
-			newGame.players = ["player:"+self.p_id]
-			newGame.to_redis()
+			game.players = ["player:"+self.p_id]
+			game.save()
 
-			g_id = newGame.g_id
+			g_id = game.g_id
 			result['text'] = "new game started"
 
 		if 'computers' in kwargs:
@@ -217,15 +214,15 @@ class Player:
 		return data_dict
 
 class Game:
-	g_id = 123
+	g_id = ""
 	name = "Richard's room"
 	g_round = 0
 	players = []
+	state = ""
+	saved = False
 
 	options = {
-		'witch' : 'false',
-		'fortune' : 'false',
-		'lovers' :'false'
+		'max_players': 2,
 	}
 
 	def __init__(self, g_id=None, session_key=None):
@@ -234,22 +231,22 @@ class Game:
 			if 'g_id' in session_data.keys():
 				g_id = session_data['g_id']
 
-		if not self.from_redis(g_id):
+		if not self.load(g_id):
 			self.g_id = str(uuid.uuid4())
+			self.state = "lobby"
 			self.g_round = 0
 
-	def to_redis(self):
+	def save(self):
 		ww_redis_db.hset("g_list:"+self.g_id, "name", self.name)
 		ww_redis_db.hset("g_list:"+self.g_id, "round", self.g_round)
-		redis_concat_string = ""
+		ww_redis_db.hset("g_list:"+self.g_id, "state", self.state)
+		players_string = ""
 		if len(self.players) > 0:
-			redis_concat_string = "|".join(self.players)
-		if len(self.players) == 1:
-			redis_concat_string += "|"
+			players_string = "|".join(self.players)
 
-		ww_redis_db.hset("g_list:"+self.g_id, "players", redis_concat_string)
+		ww_redis_db.hset("g_list:"+self.g_id, "players", players_string)
 
-	def from_redis(self, g_id):
+	def load(self, g_id):
 		if g_id is None:
 			return False
 
@@ -261,9 +258,18 @@ class Game:
 
 		self.g_id = g_id
 		self.players = redis_game['players'].split('|')
-		self.players.pop()		# using split with delimiter producing an empty string, which would show up as a player otherwise
+		self.state = redis_game['state']
 
 		return True
+
+	def delete(self):
+		ww_redis_db.delete("g_list:"+self.g_id)
+
+	def is_saved(self):
+		if self.saved:
+			return True
+		else:
+			return False
 
 	def get_players(self):
 		return self.players
@@ -274,8 +280,23 @@ class Game:
 	def set_g_round(self, round_number):
 		self.g_round = round_number
 
-	def add_player():
-		return
+	def state_change(self, state):
+		data_dict = {}
+		data_dict['state'] = state
+		data_dict['channel'] = "game:"+self.g_id
+
+		publish_data("game:"+self.g_id, data_dict)
+
+	def add_player(self, p_id):
+		if "player:"+p_id not in self.players:
+			self.players.append("player:"+p_id)
+
+		if len(self.players) == self.options['max_players']:
+			self.state_change("ready")
+
+	def remove_player(self, p_id):
+		while "player:"+p_id in self.players:
+			self.players.remove("player:"+p_id)
 
 class Event:
 	def __init__():
@@ -302,13 +323,10 @@ def broadcast_games():
 		if len(g_list) > 0:
 			# find game with least spaces
 			for g_key in g_list:
-				game = ww_redis_db.hgetall(g_key)
-				game = {k.decode('utf8'): v.decode('utf8') for k, v in game.items()}	#convert from byte array to string dict
+				g_id = str(g_key.decode("utf-8")).split(":")[1]
+				game = Game(g_id)
 
-				players = game['players'].split("|")		# obtain players in current game in the form of player:uuid
-				players.pop()
-
-				games_dict[g_key.decode("utf-8")] = str(len(players))
+				games_dict[g_key.decode("utf-8")] = str(len(game.players))
 
 	data_dict["games"] = games_dict
 	data_dict["channel"] = "lobbyinfo"
@@ -328,6 +346,7 @@ def push_system_message(msg):
 pcb2 = None
 cur_g_id = None
 
+# redundant and is broken
 def broadcast_players(g_id):
 	global pcb2
 	global cur_g_id
