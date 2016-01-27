@@ -4,12 +4,31 @@
 <html>
 
 <link rel="stylesheet" type="text/css" href="{% static 'werewolves_game/stylesheets/style.css' %}" />
+<script type="text/javascript" src="{% static 'werewolves_game/javascript/game.js' %}"></script>
+<script type="text/javascript" src="{% static 'werewolves_game/javascript/jquery-1.11.3.js' %}"></script>
 
 <h1>Werewolves the game</h1>
 
-<table id="player_list">
-	<tr><td>Name</td><td>Allegiance</td></tr>
-</table>
+<div class="general_container">
+	<div id="game_lobby">
+		<table id="game_list">
+			<tr><td>Name</td><td>Allegiance</td></tr>
+		</table>
+	</div>
+	<div id="player_lobby">
+		<table id="player_list">
+			<tr><td>Name</td><td>Allegiance</td></tr>
+		</table>
+	</div>
+</div>
+
+<div class="general_container">
+	<div id="events"></div>
+</div>
+
+<div class="general_container">
+	<div id="chatbox"></div>
+</div>
 
 <div class="general_container">
 	<div id="server_updates"></div>
@@ -18,25 +37,23 @@
 
 <div class="general_container">
 	<textarea rows="4" cols="60" id="server_commands">input commands here</textarea>
-	<div id="send_command">Click to send!</div>
-	<div id="quick_match">Quick match</div>
-	<div id="create_match">create_match</div>
-	<div id="leave_match">leave_match</div>
-	<div id="flush_db">Flush DB/session</div>
-	<div id="check_session">check_session</div>
-	<div id="del_session">del_session</div>
-	<div id="unsubscribe">unsubscribe to channel</div>
+	<div class="button" id="send_command">Click to send!</div>
+	<div class="button" id="quick_match">Quick match</div>
+	<div class="button" id="create_match">create_match</div>
+	<div class="button" id="leave_match">leave_match</div>
+	<div class="button" id="flush_db">Flush DB/session</div>
+	<div class="button" id="check_session">check_session</div>
+	<div class="button" id="del_session">del_session</div>
+	<div class="button" id="unsubscribe">unsubscribe to channel</div>
 </div>
+
 <div class="hidden">
 	<div id="sessionID">{{ response }}</div>
 </div>
 
-{% if response %}<p><strong>{{ response }}</strong></p>{% endif %}
-
 {% swampdragon_settings %}
 <script type="text/javascript" src="{% static 'swampdragon/js/dist/swampdragon.min.js' %}"></script>
 <script type="text/javascript" src="{% static 'swampdragon/js/dist/datamapper.js' %}"></script>
-<script type="text/javascript" src="{% static 'werewolves_game/javascript/jquery-1.11.3.js' %}"></script>
 
 <script>
 console.log("working");
@@ -50,8 +67,8 @@ swampdragon.onChannelMessage(function(channels, message){
 		for (var key in message.data.games){
 			$("#player_list").append("<tr><td>"+key+"</td>"+"<td>"+message.data.games[key]+"</td></tr>");
 			$("#player_list tbody").children().last().on("click", {"g_id":key}, function(event){
-				swampdragon.subscribe('lobby', 'player_list:'+event.data.g_id, {'output':'player_list', 'g_id':event.data.g_id}, null, null);
-				swampdragon.callRouter('get_players', 'lobby', {'output':'player_list', 'g_id':event.data.g_id}, null, null);
+				//swampdragon.subscribe('lobby', 'player_list:'+event.data.g_id, {'output':'player_list', 'g_id':event.data.g_id}, null, null);
+				//swampdragon.callRouter('get_players', 'lobby', {'output':'player_list', 'g_id':event.data.g_id}, null, null);
 			});
 		}
 	}

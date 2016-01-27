@@ -21,8 +21,18 @@
         # this method doesn't work for ajax requests, but I guess you should KISS it anyway
 
         # can also writ to file if you have to
-            #log = open('logfile.txt', 'a')
-            #log.write(str(kwargs)+" are the kawrgs for get subscription channels\n")
+            #with open('logfile.txt', 'a') as log:
+                #log.write(str(kwargs)+" are the kawrgs for get subscription channels\n")
+
+    # Sessions
+        # AJAX feeds lifepulse every 25 seconds from client
+        # this reaches the session_handler view, which updates the session with latest access time
+        # this is complemented by a PCB at the bottom of game.py (check_activity()) which is called through the session_handler router
+            # the PCB cycles through all session data and deletes out of date ones, or alternatively a long time since the last life pulse
+            # this is expensive, so I'm not sure if it's a good way of doing it
+            # I could create a separate DB for players in game, and create a primary key for the sessions, then cycle through a JOIN table
+            # I could also subset players (logged in, in game, guest) and have separate times for them
+            # see http://stackoverflow.com/questions/235950/how-to-lookup-django-session-for-a-particular-user for helpful approaches
 
     # overwrite the subscription method?
     # bug: using channel as a key in the data dict passed in a subscribe call results in an empty kwarg. Very confusing.
@@ -40,44 +50,48 @@
         #That means whenever publishing info, it needs to be check server side that you're allowed to do that. Yawn.
 
 # TODO
-    # separate users and game players.
     # Write list of subscribed channels I want to listen to in .txt
         # my game, the lobby, system messages, specific groups of players (werewolves/merlin etc), whispers
-    # unsubscribe functionality, ie. from channels when leaving game
     # implement timeout for users in games and for the games themselves
         # ignore check_activity, I want the sessions to last 2 weeks, but can cleanup based on differing times of session['latest activity']
     # work out how to identify other players. Player ID's would need to be open, but I'd need to look up session data based on p_id :S
-    # work out how to trigger state changes independently
     # read this awesome post http://mrjoes.github.io/2013/06/21/python-realtime.html
+    # feedback a countdown to game beginning to user, which starts immediate based on if all users have input "ready"
+        # this requires retaining the callback ID for the iol and cancelling it
+        # maybe add a state to the player class
+    # use an object pool for the game so I don't have to keep allocating variables, or I could just rely on the redis cache.
+    # callback queue class? Component in Player, Game etc.
+    # messaging class? Component
+    # a redis save/load static function class which accepts key and inputs in the form of a string and dict? Called by the classes that are saved to redis
+    # privatise variables/add static functions
+    # when game_state is called, create character specific objects.
+        # Look at using a factory to generate different objects?    http://code.activestate.com/recipes/86900/
+    # move periodic callbacks to a contained class
+    # implement serialisation of objects http://stackoverflow.com/questions/3768895/python-how-to-make-a-class-json-serializable
 
     # Currently working on game.py Player class
-        # the plan is to move it all under the player object, it's not thoroughly tested though
-        # Also need to reply and interpret better with the client-server interactions (JSON array given)
+        # Look at serialising to JSON for client side object loading. How do I hide situational data?
         # have a standard parameter object to extend? Always contains session data for example on the client side JS
-        # set up inheritance and move session_data into user class
     # handle connection if player closes browser/session ends (started with the pulse_activity ajax)
-    # convert from PCB to celery/CRON jobs
-    # perhaps add a redis_hander, which interfaces with the redis DB to search the keys in different ways (ie for empty games, inactive players)
-    # possible I add a flag to the objects, so at the end of a router, if the object's flag says update, I then save it to redis
-    # or I add custom redis saves that doesn't do the whole thing again. Still, not a lot for python to do to just serialise a relatively small object
-    # privatise variables
-
-# look into using swampdragon's session store? http://swampdragon.net/documentation/sessions/
+    # convert from PCB to celery/CRON jobs? http://celery.readthedocs.org/en/latest/userguide/periodic-tasks.html
+        # Or ask Stack overflow if this is really necessary
+    # perhaps add a redis_manager, which interfaces with the redis DB to search the keys in different ways (ie for empty games, inactive players)
+        # can also load/save based on given keys
+    # possible I add a flag to the objects, so at the end of a router, if the object's flag says update, I then save it to redis. Or i input it into the __del__ function
+    # or I add custom redis saves that doesn't do the whole thing again. Still, not a lot for python to do to just serialise relatively small objects
+    # timeout implemented by accessing iol from tornado.ioloop. This singleton would not be threadsafe, but the server runs on just one thread by default. Might have issues with scaling though
+    # look into using swampdragon's session store? http://swampdragon.net/documentation/sessions/
 
 # player.status = ['ingame', 'kicked', 'searching', 'finished', 'outgame']
-# game.state = ['voting', 'lobby', 'discussion']
-    
-# BUGS
+# game.state = ['voting', 'lobby', 'discussion', 'starting']
 
-# Sessions
-    # AJAX feeds lifepulse every 25 seconds from client
-    # this reaches the session_handler view, which updates the session with latest access time
-    # this is complemented by a PCB at the bottom of game.py (check_activity()) which is called through the session_handler router
-        # the PCB cycles through all session data and deletes out of date ones, or alternatively a long time since the last life pulse
-        # this is expensive, so I'm not sure if it's a good way of doing it
-        # I could create a separate DB for players in game, and create a primary key for the sessions, then cycle through a JOIN table
-        # I could also subset players (logged in, in game, guest) and have separate times for them
-        # see http://stackoverflow.com/questions/235950/how-to-lookup-django-session-for-a-particular-user for helpful approaches
+# outline the different html elements I'll have for a rough idea where the information I'm giving is going to go
+    # chatbox
+    # events
+    # timers
+    # players
+
+# BUGS
 
 # Production checklist
     # using DB session store, needs to be cleared out regularly in production https://docs.djangoproject.com/en/1.9/ref/django-admin/#django-admin-clearsessions
@@ -96,7 +110,8 @@ from swampdragon import route_handler
 from swampdragon.route_handler import ModelPubRouter, BaseRouter
 from werewolves_game.models import Notification
 from werewolves_game.serializers import NotificationSerializer
-from werewolves_game.server_scripting.game import *
+from werewolves_game.server_scripting.game import *     # bad practice
+from werewolves_game.server_scripting.user import Player
 from werewolves_game.server_scripting.redis_util import *
 
 from django.contrib.sessions.models import Session # redundant? Temp using it in session_handling
@@ -171,16 +186,18 @@ class LobbyRouter(BaseRouter):
 
         session_data = SessionStore(session_key=kwargs['session_key'])
 
+        if kwargs['action'] == "flush_db":
+            ww_redis_db.flushall()     # use to clear redis of all keys to start afresh
+            session_data.flush()
+            response = "flushed!"
+
         player = Player(kwargs['session_key'])
 
         if kwargs['action'] == "join_game":
             response = player.find_game(**kwargs)
         elif kwargs['action'] == "leave_game":
             response = player.leave_game(**kwargs)
-        if kwargs['action'] == "flush_db":
-            ww_redis_db.flushall()     # use to clear redis of all keys to start afresh
-            session_data.flush()
-            response = "flushed!"
+
 
         self.send(response)
 
