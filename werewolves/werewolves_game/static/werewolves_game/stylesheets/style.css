@@ -14,7 +14,7 @@ h1{
 }
 
 #player_list, #game_list{
-	width:180px;
+	width:300px;
 }
 #server_updates, #server_commands{}
 

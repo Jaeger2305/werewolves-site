@@ -1,5 +1,6 @@
 import redis
 import uuid
+import json
 from werewolves_game.server_scripting.redis_util import *
 import werewolves_game.server_scripting.game
 from tornado.ioloop import PeriodicCallback, IOLoop
@@ -47,6 +48,11 @@ class User:
 	def save(self):
 		ww_redis_db.hset("player_list:"+self.p_id, "name", self.name)		# save player to redis DB (see redis_util for more info)
 		ww_redis_db.hset("player_list:"+self.p_id, "g_history", ("|").join(self.g_history))
+
+	def as_JSON(self, user_json={}):
+		user_json['p_id'] = self.p_id
+		user_json['name'] = self.name
+		return json.dumps(user_json, default=lambda o: o.__dict__, sort_keys=True, indent=4)
 
 	def push_message(self, **kwargs):
 		data_dict = {}
@@ -100,6 +106,12 @@ class Player(User):
 		super().save()
 		ww_redis_db.hset("player_list:"+self.p_id, "state", self.state)
 		ww_redis_db.hset("player_list:"+self.p_id, "character", self.character)
+
+	def as_JSON(self, player_json={}):
+		super().as_JSON(player_json)
+		player_json['character'] = self.character
+		player_json['state'] = self.state
+		return json.dumps(player_json, default=lambda o: o.__dict__, sort_keys=True, indent=4)
 
 	def leave_game(self, **kwargs):
 		result = {}

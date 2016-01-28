@@ -70,13 +70,12 @@
     # implement serialisation of objects http://stackoverflow.com/questions/3768895/python-how-to-make-a-class-json-serializable
 
     # Currently working on game.py Player class
-        # Look at serialising to JSON for client side object loading. How do I hide situational data?
+        # Implement serialisers for the character classes (only player/user/game done)
+        # add a filter method to hide data based on character status
         # have a standard parameter object to extend? Always contains session data for example on the client side JS
     # handle connection if player closes browser/session ends (started with the pulse_activity ajax)
     # convert from PCB to celery/CRON jobs? http://celery.readthedocs.org/en/latest/userguide/periodic-tasks.html
         # Or ask Stack overflow if this is really necessary
-    # perhaps add a redis_manager, which interfaces with the redis DB to search the keys in different ways (ie for empty games, inactive players)
-        # can also load/save based on given keys
     # possible I add a flag to the objects, so at the end of a router, if the object's flag says update, I then save it to redis. Or i input it into the __del__ function
     # or I add custom redis saves that doesn't do the whole thing again. Still, not a lot for python to do to just serialise relatively small objects
     # timeout implemented by accessing iol from tornado.ioloop. This singleton would not be threadsafe, but the server runs on just one thread by default. Might have issues with scaling though

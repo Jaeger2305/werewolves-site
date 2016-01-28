@@ -102,6 +102,15 @@ class Game:
 
 		ww_redis_db.hset("g_list:"+self.g_id, "players", players_string)
 
+		games_dict = {}
+		data_dict = {}
+		games_dict["json"] = self.as_JSON()
+
+		data_dict["games"] = games_dict
+		data_dict["channel"] = "game:"+self.g_id
+
+		publish_data("game:"+self.g_id, data_dict)
+
 	def load(self, g_id):
 		if g_id is None:
 			return False
@@ -123,7 +132,20 @@ class Game:
 		return True
 
 	def as_JSON(self):
-		json.dumps(self)
+		game_json = {}
+		game_json['g_id'] = self.g_id
+		game_json['name'] = self.name
+		game_json['g_round'] = self.g_round
+
+		players_json = {}
+		for character in self.characters:
+			players_json[character.p_id] = character.as_JSON()
+
+		game_json['players'] = players_json
+		game_json['state'] = self.state
+		game_json['history'] = self.history
+
+		return json.dumps(game_json, default=lambda o: o.__dict__, sort_keys=True, indent=4)
 
 	def delete(self):
 		ww_redis_db.delete("g_list:"+self.g_id)
@@ -173,6 +195,9 @@ class Game:
 		print(self.characters)
 
 	def state_change(self, state):
+		self.state = state
+		self.saved = False
+
 		if state == "ready":
 			self.assign_roles()
 
@@ -181,6 +206,9 @@ class Game:
 		data_dict['channel'] = "game:"+self.g_id
 
 		publish_data("game:"+self.g_id, data_dict)
+
+		if not self.is_saved():
+			self.save()
 
 	def add_player(self, p_id):
 		if p_id not in self.players:
@@ -210,7 +238,7 @@ def broadcast_games():
 	games_dict = {}
 
 	if pcb is None:
-		pcb = PeriodicCallback(broadcast_games, 5000)
+		pcb = PeriodicCallback(broadcast_games, 2000)
 		pcb.start()
 
 	g_list = ww_redis_db.keys("g_list:*")
@@ -223,8 +251,8 @@ def broadcast_games():
 				g_id = str(g_key.decode("utf-8")).split(":")[1]
 				game = Game(g_id)
 
-				games_dict[g_id] = str(len(game.players))
-				#games_dict["json"] = game.as_JSON()
+				#games_dict[g_id] = str(len(game.players))
+				games_dict["json"] = game.as_JSON()
 
 	data_dict["games"] = games_dict
 	data_dict["channel"] = "lobbyinfo"
