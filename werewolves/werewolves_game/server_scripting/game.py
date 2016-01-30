@@ -111,6 +111,8 @@ class Game:
 
 		publish_data("game:"+self.g_id, data_dict)
 
+		self.saved = True
+
 	def load(self, g_id):
 		if g_id is None:
 			return False
