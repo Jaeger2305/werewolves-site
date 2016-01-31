@@ -37,9 +37,11 @@
 import redis
 import uuid
 import json
+import weakref
 from werewolves_game.server_scripting.redis_util import *		# for the ww_redis_handler. Redudundant for that purpose, it should be found in the swampdragon file redis_publisher
 import werewolves_game.server_scripting.user as user
-from werewolves_game.server_scripting.characters import Character, Werewolf, Witch
+from werewolves_game.server_scripting.characters import Human, Werewolf, Witch, CharacterFactory
+from werewolves_game.server_scripting.event import EventFactory
 
 from tornado.ioloop import PeriodicCallback, IOLoop
 from swampdragon.pubsub_providers.data_publisher import publish_data
@@ -59,17 +61,16 @@ class GameManager:
 	# allocate a player to a game
 
 class Game:
-	# should be populated based on redis/create game function call
-
 	def __init__(self, g_id=None, session_key=None):
 		self.name = "Richard's room"
 		self.g_round = 0
 		self.players = []	# list of Players
-		self.characters = {}	# redundant?
 		self.state = "matchmaking"
 		self.saved = False		# async issues?
 		self.history = []	# list of Events
 		self.callback_queue = {}
+		self.event_queue = []	# events waiting to happen. Triggered based on Game.state
+		self.event_history = []
 		self.options = {	'max_players': 2,
 							'fortune_teller': False,
 							'witch': False	}
@@ -133,7 +134,8 @@ class Game:
 			player_ids = redis_game['players'].split('|')
 			for p_id in player_ids:
 				if p_id not in self.get_player_ids():
-					self.players.append(user.Player(p_id))
+					player = user.Player(p_id)
+					self.players.append(CharacterFactory.create_character(player.character))
 		else:
 			self.players = []
 
@@ -177,47 +179,93 @@ class Game:
 
 		return id_list
 
-	def get_group(self, group):
-		# loop through self.players and return those which fit the group as an array
-		return self.players
+	def get_group(self, selectors):
+		# loop through self.players and remove those that don't fit the group as an array
+		group_list = self.players
 
-	def get_g_round(self):
-		return self.g_round
+		for selector in selectors:
+			# selecting based on player.status
+			if selector == "alive" or selector == "dead":
+				group_list = [player for player in group_list if player.status == selector]
 
-	def set_g_round(self, round_number):
-		self.g_round = round_number
+			# selecting based on last event
+			if selector == "last_result":
+				group_list = [player for player in group_list if player in self.event_history[0].result_subjects]
+				# for player in group_list:
+				# 	if player not in self.event_history[0].result_subjects:
+				# 		self.players.remove(player)
+
+			# selecting based on Class type
+			if isinstance(selector, Character):
+				group_list = [player for player in group_list if isinstance(player, selector)]
+				# for player in self.players:
+				# 	if not isinstance(player, selector):
+				# 		group_list.remove(player)
+
+			# selecting based on Class type from string
+			elif isinstance(selector, str):
+				for player in self.players:
+					print("no more eval for you")
+					#selector = eval(selector)
+					#if not isinstance(player, selector):
+						#group_list.remove(player)
+					raise TypeError
+
+		return group_list
 
 	def assign_roles(self):
 		shuffle(self.players)
-		self.characters = []
 		werewolves_count = ceil(0.3*self.options['max_players'])
-		witch_count = 0
-
-		for x in range(werewolves_count):
-			self.characters.append(Werewolf(self.players[x]))
 
 		if self.options['witch']:
 			witch_count = ceil(0.1*self.options['max_players'])
-			for x in range(werewolves_count, witch_count):
-				self.characters.append(Witch(self.players[x]))
+		else:
+			witch_count = 0
+
+		for x in range(werewolves_count):
+			self.players[x].character = "werewolf"
+
+		for x in range(werewolves_count, werewolves_count+witch_count):
+			self.players[x].character = "witch"
 
 		for x in range(werewolves_count+witch_count, len(self.players)):
-			self.characters.append(Character(self.players[x]))
+			self.players[x].character = "human"
 
-		for x in range(len(self.players)):
-			# save to redis
-			player = user.Player(self.players[x])
-			player.character = "werewolf"#self.characters[self.players[x]]
-			player.save()
+		for i, player in enumerate(self.players):
+			self.players[i] = ().create_character(player.character, p_id=player.p_id)
+			self.players[i].save()
+			print(player.character)
 
-		print(self.characters)
-
-	def state_change(self, state):
+	def change_state(self, state):
 		self.state = state
-		self.saved = False
 
 		if state == "ready":
 			self.assign_roles()
+			self.change_state("waiting")
+			return
+
+		if state == "waiting":	# if no other events, start a new round
+			self.g_round += 1
+			night = EventFactory.create_event("night", self)
+			self.event_queue.append(night)
+
+			day = EventFactory.create_event("day", self)
+			self.event_queue.append(day)
+			self.change_state("new_event")
+			return
+
+		if state == "new_event":
+			# publish data to players
+			self.event_queue[0].start()
+			raise NotImplementedError
+
+		if state == "finished_voting":
+			self.event_queue[0].finish_event()
+			raise NotImplementedError
+
+		if state == "game_finished":
+			#save to DB, kick all players etc.
+			raise NotImplementedError
 
 		data_dict = {}
 		data_dict['state'] = state
@@ -225,13 +273,29 @@ class Game:
 
 		publish_data("game:"+self.g_id, data_dict)
 
-		if not self.is_saved():
-			self.save()
+	def game_end(self):
+		winners = ["humans", "werewolves"]
 
-	def add_player(self, p_id):
-		player = user.Player(p_id)
+		if not self.get_group([Human, "alive"]):
+			winners.remove("werewolves")
+
+		if not self.get_group([Werewolf, "alive"]):
+			winners.remove("humans")
+
+		return winners
+
+	def add_player(self, p_id=None, player=None):
+		if not p_id:
+			player = user.Player(p_id)
 		if player not in self.players:
+			# add a weakref to game
+			self.player.game_instance = weakref.ref(self)
 			self.players.append(player)
+
+
+		if len(self.players) >= self.options['max_players']:
+			print("Game full, starting now")
+			self.change_state("ready")
 
 		self.save()
 
@@ -323,8 +387,6 @@ def broadcast_players(g_id):
 	publish_data("player_list:"+g_id, data_dict)
 
 	return data_dict
-
-
 
 pcb3 = None
 def check_activity():

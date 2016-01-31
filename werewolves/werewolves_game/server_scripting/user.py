@@ -1,6 +1,7 @@
 import redis
 import uuid
 import json
+import weakref
 from werewolves_game.server_scripting.redis_util import *
 import werewolves_game.server_scripting.game
 from tornado.ioloop import PeriodicCallback, IOLoop
@@ -134,6 +135,7 @@ class Player(User):
 			self.state = redis_player['state']
 		if 'g_id' in redis_player:
 			self.g_id = redis_player['g_id']
+			self.game = weakref.ref(Game())
 
 		return super().load(p_id, redis_player)
 
@@ -142,7 +144,7 @@ class Player(User):
 		super().save()
 		ww_redis_db.hset("player_list:"+self.p_id, "state", self.state)
 		ww_redis_db.hset("player_list:"+self.p_id, "character", self.character)
-		ww_redis_db.hset("player_list:"+self.p_id, "g_id", self.g_id)
+		#ww_redis_db.hset("player_list:"+self.p_id, "g_id", self.g_id)
 
 	def as_JSON(self, player_json={}):
 		super().as_JSON(player_json)

@@ -249,6 +249,9 @@ class LobbyRouter(BaseRouter):
             publish_data(channel, data_dict)
         #else:  # search through game given this grouping (witch, werewolf, humans etc.)
 
+    def vote(self, **kwargs):
+        raise NotImplementedError
+
 # register router
 route_handler.register(NotificationRouter)
 route_handler.register(LobbyRouter)
