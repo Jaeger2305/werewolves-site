@@ -13,40 +13,62 @@ SessionStore = import_module(settings.SESSION_ENGINE).SessionStore
 
 class User:
 	# user specific functions pertaining to general usage (login, cookies etc.)
-	p_id = ""
-	name = ""
-	g_history = []	# list of games just been in to assist matchmaking algorithm
-	session = None
-	session_key = ""
 
-	def __init__(self, key):
-		self.session = SessionStore(session_key=key)
-		self.session_key = key
+	def __init__(self, p_id=None, session_key=None):
+		self.name = ""
+		self.g_history = []	# list of games just been in to assist matchmaking algorithm
+		self.status = ""
+		self.session_key = ""
 
-		if 'p_id' in self.session.keys():
-			self.load(self.session['p_id'])
-		else:
-			self.name = "Richard"
-			self.p_id = str(uuid.uuid4())
+		if session_key:
+			self.session = SessionStore(session_key=session_key)
+			self.session_key = session_key
+			if 'p_id' in self.session:
+				p_id = self.session['p_id']
 
-			self.session['p_id'] = self.p_id
-			self.session.save()
+		if p_id:
+			self.p_id = p_id
+			try:
+				self.load(p_id)
+			except Exception as error:
+				print("couldn't load user's p_id from redis: "+str(error))
+				print("putting in default values")
 
-			self.save()
+				self.name = "Richard"
+				self.p_id = str(uuid.uuid4())
+				self.status = "outgame"
+
+				self.session['p_id'] = self.p_id
+				self.session['status'] = self.status
+				self.session.save()
+
+				self.save()
+
+
+	def __eq__(self, other):
+		return self.p_id == other.p_id
 
 	def load(self, p_id, redis_player=None):
-		self.p_id = p_id
-
 		if not redis_player:
 			redis_player = ww_redis_db.hgetall("player_list:"+str(p_id))
 			redis_player = {k.decode('utf8'): v.decode('utf8') for k, v in redis_player.items()}
 
-		if 'g_history' in redis_player.keys():
-			self.g_history = (redis_player['g_history']).split("|")
-		return
+		if len(redis_player) == 0:
+			raise Exception("no redis player found")
+			return False
+
+		self.p_id = p_id
+		self.session_key = redis_player['session_key']
+		self.session = SessionStore(session_key=self.session_key)
+		self.status = redis_player['status']
+		self.g_history = (redis_player['g_history']).split("|")
+		
+		return True
 
 	def save(self):
+		ww_redis_db.hset("player_list:"+self.p_id, "session_key", self.session_key)
 		ww_redis_db.hset("player_list:"+self.p_id, "name", self.name)		# save player to redis DB (see redis_util for more info)
+		ww_redis_db.hset("player_list:"+self.p_id, "status", self.status)
 		ww_redis_db.hset("player_list:"+self.p_id, "g_history", ("|").join(self.g_history))
 
 	def as_JSON(self, user_json={}):
@@ -58,16 +80,16 @@ class User:
 		data_dict = {}
 		channel = ""
 
-		if 'msg' not in kwargs.keys() or 'groups' not in kwargs.keys():
+		if 'msg' not in kwargs or 'groups' not in kwargs:
 			return
 
 		if (	'game' in kwargs['groups'] and
-				'g_id' in self.session.keys() and
-				'status' in self.session.keys() and
+				'g_id' in self.session and
+				'status' in self.session and
 				self.session['status'] == "ingame"
 			):
 			channel = 'game:'+self.session['g_id']
-		elif 'player' in kwargs['groups'] and 'p_id' in kwargs.keys():
+		elif 'player' in kwargs['groups'] and 'p_id' in kwargs:
 			channel = 'player:'+kwargs['p_id']
 
 		data_dict['message'] = kwargs['msg']
@@ -76,36 +98,51 @@ class User:
 		publish_data(channel, data_dict)
 		return data_dict
 
+	def give_message(self, msg, sender, target, time):
+		data_dict = {}
+		channel = "player:"+self.p_id
+
+		data_dict['message'] = msg
+		data_dict['sender'] = sender
+		data_dict['target'] = target
+		data_dict['time'] = time
+		data_dict['channel'] = channel
+		data_dict['type'] = "message"
+
+		publish_data(channel, data_dict)
+		return data_dict
+
 class Player(User):
 	# game specific class for interacting with the game class (join, interact with other players generally)
-	character = "unassigned"
-	state = "alive"
 
-	def __init__(self, key):
-		super().__init__(key)
-
-		if 'p_id' in self.session.keys():
-			self.load(self.session['p_id'])
+	def __init__(self, p_id, session_key=None):
+		if session_key:
+			super().__init__(session_key=session_key)
 		else:
-			self.character = "unassigned"
-			self.state = "alive"
-
-			self.save()
+			super().__init__(p_id=p_id)
+		
+		self.character = "unassigned"
+		self.state = "alive"
 
 	def load(self, p_id):
-		redis_player = ww_redis_db.hgetall("player_list:"+str(self.p_id))
+		redis_player = ww_redis_db.hgetall("player_list:"+str(p_id))
 		redis_player = {k.decode('utf8'): v.decode('utf8') for k, v in redis_player.items()}
-		super().load(p_id, redis_player)
 
-		if 'character' in redis_player.keys():
+		if 'character' in redis_player:	# can be rewritten with all() keyword http://stackoverflow.com/questions/8041944/if-x-and-y-in-z
 			self.character = redis_player['character']
-		if 'state' in redis_player.keys():
+		if 'state' in redis_player:
 			self.state = redis_player['state']
+		if 'g_id' in redis_player:
+			self.g_id = redis_player['g_id']
+
+		return super().load(p_id, redis_player)
+
 
 	def save(self):
 		super().save()
 		ww_redis_db.hset("player_list:"+self.p_id, "state", self.state)
 		ww_redis_db.hset("player_list:"+self.p_id, "character", self.character)
+		ww_redis_db.hset("player_list:"+self.p_id, "g_id", self.g_id)
 
 	def as_JSON(self, player_json={}):
 		super().as_JSON(player_json)
@@ -116,24 +153,24 @@ class Player(User):
 	def leave_game(self, **kwargs):
 		result = {}
 
-		if 'g_id' in kwargs.keys():
+		if 'g_id' in kwargs:
 			game = werewolves_game.server_scripting.game.Game(kwargs['g_id'])
-		elif 'g_id' in self.session.keys():
+		elif 'g_id' in self.session:
 			game = werewolves_game.server_scripting.game.Game(self.session['g_id'])
-		elif self.session['status'] == "outgame":
+		elif self.session.has_key("status") and self.session['status'] == "outgame":
 			result['error'] = "Player not currently in a game."
 			return result
 		else:
 			result['error'] = "Game not found"
 
-		if self.p_id in game.players:
+		if self in game.players:
 			game.remove_player(self.p_id)
 			
 			result['response'] = "Player removed from game"
 		else:
 			result['error'] = "Player not found in game: "+game.g_id
 		
-		if 'g_id' in self.session.keys():
+		if 'g_id' in self.session:
 			self.session['status'] = "outgame"
 			#self.session.pop('g_id', None)
 			self.session.save()
@@ -145,7 +182,7 @@ class Player(User):
 	def find_game(self, **kwargs):
 		found_game = False
 
-		if 'g_id' in self.session.keys() and 'status' in self.session.keys() and self.session['status'] == 'ingame':
+		if 'g_id' in self.session and 'status' in self.session and self.session['status'] == 'ingame':
 			return {'text':"already ingame",
 					'g_id':self.session['g_id']}
 
@@ -154,9 +191,9 @@ class Player(User):
 		result['error'] = ""
 
 		# search method
-		if 'g_id' in kwargs.keys():
+		if 'g_id' in kwargs:
 			g_list = ww_redis_db.keys("g_list:"+kwargs['g_id']+"*")
-		elif 'g_name' in kwargs.keys():
+		elif 'g_name' in kwargs:
 			# search for g_name in database TODO
 			g_list = ww_redis_db.keys("g_list:*")
 			result['text'] = "found game name in redis, joining"
@@ -164,7 +201,7 @@ class Player(User):
 			g_list = ww_redis_db.keys("g_list:*")		# should optimise by using SCAN http://redis.io/commands/scan, keys is warned as not for production
 		
 		if len(g_list) > 0:
-			if 'g_name' in kwargs.keys():
+			if 'g_name' in kwargs:
 				for g_key in g_list:
 					if ww_redis_db.hget("name", g_key) == kwargs['g_name']:
 						found_game = True

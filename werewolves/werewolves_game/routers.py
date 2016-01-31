@@ -91,6 +91,10 @@
     # players
 
 # BUGS
+    # memory leak on game.py. I don't think it's clearing up the objects properly.
+    # This is demonstrated when you stop preventing duplicate p_id's into the g_list:* redis, found in game.py Game.save()
+        # aaaand it's back. I'm tired.
+        # I can either stop using the objects, or store them in a global pool, or look for how to clean them up right.
 
 # Production checklist
     # using DB session store, needs to be cleared out regularly in production https://docs.djangoproject.com/en/1.9/ref/django-admin/#django-admin-clearsessions
@@ -110,7 +114,7 @@ from swampdragon.route_handler import ModelPubRouter, BaseRouter
 from werewolves_game.models import Notification
 from werewolves_game.serializers import NotificationSerializer
 from werewolves_game.server_scripting.game import *     # bad practice
-from werewolves_game.server_scripting.user import Player
+from werewolves_game.server_scripting.user import Player, User
 from werewolves_game.server_scripting.redis_util import *
 
 from django.contrib.sessions.models import Session # redundant? Temp using it in session_handling
@@ -131,21 +135,19 @@ class GameRouter(BaseRouter):
 
 class LobbyRouter(BaseRouter):
     route_name = 'lobby'
-    valid_verbs = BaseRouter.valid_verbs + ['messaging', 'session_handling', 'pushMessage', 'get_players', 'get_games_list', 'join_game', 'leave_game', 'matchmaking', 'messaging']
+    valid_verbs = BaseRouter.valid_verbs + ['messaging', 'session_handling', 'init', 'matchmaking']
 
     # all published methods pass through this func, the returned array of strings are the channels the messages are broadcast on.
     # defaults to first element (lobbyinfo)
     def get_subscription_channels(self, **kwargs):
-        broadcast_games()   # should move this to a separate init router
-
         channels = ['lobbyinfo', 'playersInGame', 'sysmsg']
         
         # subscribing
-        if 'session_key' in kwargs.keys() and kwargs['session_key'] is not None:
+        if 'session_key' in kwargs and kwargs['session_key'] is not None:
             session = SessionStore(session_key=kwargs['session_key'])
-            if 'g_id' in session.keys():
+            if 'g_id' in session:
                 channels.append('game:'+session['g_id'])
-            if 'p_id' in session.keys():
+            if 'p_id' in session:
                 channels.append('player:'+session['p_id'])
 
         # redundant?
@@ -156,8 +158,8 @@ class LobbyRouter(BaseRouter):
                 return ['game:'+kwargs['g_id']]
 
         # unsubscribing
-        if ('action' in kwargs.keys() and kwargs['action'] == "unsubscribe"
-            and 'listener' in kwargs.keys() and kwargs['listener'] == "game"
+        if ('action' in kwargs and kwargs['action'] == "unsubscribe"
+            and 'listener' in kwargs and kwargs['listener'] == "game"
             ):
             unsub_channels = []
             for channel in channels:
@@ -168,8 +170,15 @@ class LobbyRouter(BaseRouter):
 
         return channels
 
+    def init(self, **kwargs):
+        broadcast_games()
+        if "session_key" in kwargs:
+            initUser = User(session_key=str(kwargs['session_key']))     # this ensures the user's session is stored with the p_id in redis, allowing subsequent calls to redis to require only the p_id
+        else:
+            return self.send({"error":"no session key supplied"})
+
     def session_handling(self, **kwargs):
-        if 'action' not in kwargs.keys():
+        if 'action' not in kwargs:
             return self.send({"error":"no action given"})
 
         if kwargs['action'] == "delete":
@@ -180,7 +189,7 @@ class LobbyRouter(BaseRouter):
             return
 
     def matchmaking(self, **kwargs):
-        if 'action' not in kwargs.keys():
+        if 'action' not in kwargs:
             return self.send({"error":"no action given"})
 
         session_data = SessionStore(session_key=kwargs['session_key'])
@@ -190,7 +199,10 @@ class LobbyRouter(BaseRouter):
             session_data.flush()
             response = "flushed!"
 
-        player = Player(kwargs['session_key'])
+        if "p_id" in session_data:
+            player = Player(session_data['p_id'])
+        else:
+            print("error: p_id not been assigned to session")
 
         if kwargs['action'] == "join_game":
             response = player.find_game(**kwargs)
@@ -200,10 +212,46 @@ class LobbyRouter(BaseRouter):
 
         self.send(response)
 
-    def messaging(self, **kwargs):
-        player = Player(kwargs['session_key'])
-        player.push_message(**kwargs)
-        self.send("hi")
+    def messaging(self,**kwargs):
+        # requires target, session
+        if "session_key" not in kwargs:
+            self.send("error: no sesh")
+            return
+        if "target" not in kwargs:
+            self.send("no target given")
+            return
+
+        session_data = SessionStore(session_key=kwargs['session_key'])
+
+        sender = session_data['p_id']
+
+        if kwargs['target'] == "player":
+            if "id" in kwargs:
+                user = user(kwargs['id'])
+                user.give_message(kwargs['msg'], sender, kwargs['target'], kwargs['time'])
+            else:
+                self.send("please give ID of the player")
+                return
+        elif kwargs['target'] == "game":
+            #import ipdb;ipdb.set_trace()
+            game = Game(session_data['g_id'])
+
+            for user in game.players:
+                user.give_message(kwargs['msg'], sender, kwargs['target'], kwargs['time'])
+
+        elif kwargs['target'] == "world":
+            data_dict = {}
+
+            data_dict['message'] = kwargs['msg']
+            data_dict['sender'] = sender
+            data_dict['target'] = kwargs['target']
+            data_dict['time'] = kwargs['time']
+            data_dict['type'] = "message"
+            data_dict['channel'] = "sysmsg"
+            channel = "sysmsg"
+
+            publish_data(channel, data_dict)
+        #else:  # search through game given this grouping (witch, werewolf, humans etc.)
 
 # register router
 route_handler.register(NotificationRouter)

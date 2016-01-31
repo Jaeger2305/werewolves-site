@@ -59,38 +59,43 @@ class GameManager:
 	# allocate a player to a game
 
 class Game:
-	g_id = ""
-	name = "Richard's room"
-	g_round = 0
-	players = []	# list of Players
-	characters = {}
-	state = ""
-	saved = False		# async issues?
-	iol = {}	# main tornado loop uses for callbacks
-	history = []	# list of Events
-	callback_queue = {}
-
 	# should be populated based on redis/create game function call
-	options = {	'max_players': 2,
-				'fortune_teller': False,
-				'witch': False	}
 
 	def __init__(self, g_id=None, session_key=None):
+		self.name = "Richard's room"
+		self.g_round = 0
+		self.players = []	# list of Players
+		self.characters = {}	# redundant?
+		self.state = "matchmaking"
+		self.saved = False		# async issues?
+		self.history = []	# list of Events
+		self.callback_queue = {}
+		self.options = {	'max_players': 2,
+							'fortune_teller': False,
+							'witch': False	}
+
 		if g_id is None and session_key is not None:
 			session_data = SessionStore(session_key=session_key)
-			if 'g_id' in session_data.keys():
+			if 'g_id' in session_data:
 				g_id = session_data['g_id']
 
-		if not self.load(g_id):
+		try:
+			self.load(g_id)
+		except Exception as error:
+			print(error)
+			print("creating default game values")
 			self.g_id = str(uuid.uuid4())
 			self.state = "lobby"
 			self.g_round = 0
 
-		self.iol = IOLoop.current()
+		self.iol = IOLoop.current()	# main tornado loop uses for callbacks
 
 	def __del__(self):
 		self.characters = {}
+		self.players = []
 
+	def __eq__(self, other):
+		return self.g_id == other.g_id
 
 	def save(self):
 		ww_redis_db.hset("g_list:"+self.g_id, "name", self.name)
@@ -98,7 +103,7 @@ class Game:
 		ww_redis_db.hset("g_list:"+self.g_id, "state", self.state)
 		players_string = ""
 		if len(self.players) > 0:
-			players_string = "|".join(self.players)
+			players_string = "|".join(self.get_player_ids())
 
 		ww_redis_db.hset("g_list:"+self.g_id, "players", players_string)
 
@@ -113,17 +118,20 @@ class Game:
 
 	def load(self, g_id):
 		if g_id is None:
-			return False
+			raise Exception("No g_id supplied")
 
 		redis_game = ww_redis_db.hgetall("g_list:"+str(g_id))
 		redis_game = {k.decode('utf8'): v.decode('utf8') for k, v in redis_game.items()}
 
 		if not redis_game:
-			return False
+			raise Exception("g_list:"+str(g_id)+" was not found in redis")
 
 		self.g_id = g_id
 		if redis_game['players'] != "":
-			self.players = redis_game['players'].split('|')
+			player_ids = redis_game['players'].split('|')
+			for p_id in player_ids:
+				if p_id not in self.get_player_ids():
+					self.players.append(user.Player(p_id))
 		else:
 			self.players = []
 
@@ -138,8 +146,8 @@ class Game:
 		game_json['g_round'] = self.g_round
 
 		players_json = {}
-		for character in self.characters:
-			players_json[character.p_id] = character.as_JSON()
+		for player in self.players:
+			players_json[player.p_id] = player.as_JSON()
 
 		game_json['players'] = players_json
 		game_json['state'] = self.state
@@ -160,6 +168,17 @@ class Game:
 	def get_players(self):
 		return self.players
 
+	def get_player_ids(self):
+		id_list = []
+		for player in self.players:
+			id_list.append(player.p_id)
+
+		return id_list
+
+	def get_group(self, group):
+		# loop through self.players and return those which fit the group as an array
+		return self.players
+
 	def get_g_round(self):
 		return self.g_round
 
@@ -174,17 +193,14 @@ class Game:
 
 		for x in range(werewolves_count):
 			self.characters.append(Werewolf(self.players[x]))
-			#self.characters[self.players[x]] = "werewolf"
 
 		if self.options['witch']:
 			witch_count = ceil(0.1*self.options['max_players'])
 			for x in range(werewolves_count, witch_count):
 				self.characters.append(Witch(self.players[x]))
-				#self.characters[self.players[x]] = "witch"
 
 		for x in range(werewolves_count+witch_count, len(self.players)):
 			self.characters.append(Character(self.players[x]))
-			#self.characters[self.players[x]] = "human"
 
 		for x in range(len(self.players)):
 			# save to redis
@@ -211,20 +227,19 @@ class Game:
 			self.save()
 
 	def add_player(self, p_id):
-		if p_id not in self.players:
-			self.players.append(p_id)
-
-		if len(self.players) == self.options['max_players']:
-			start_handler = self.iol.call_later(2, self.state_change, "ready")
-			self.callback_queue["start_handler"] = start_handler
-			#self.state_change("ready")
+		player = user.Player(p_id)
+		if player not in self.players:
+			self.players.append(player)
 
 		self.save()
 
-	def remove_player(self, p_id):
-		while p_id in self.players:
-			self.players.remove(p_id)
+	def remove_player(self, p_id=None):
+		if p_id:
+			player = user.Player(p_id)
 
+		while player in self.players:
+			self.players.remove(player)
+		
 		self.save()
 
 
@@ -238,7 +253,7 @@ def broadcast_games():
 	games_dict = {}
 
 	if pcb is None:
-		pcb = PeriodicCallback(broadcast_games, 2000)
+		pcb = PeriodicCallback(broadcast_games, 6000)
 		pcb.start()
 
 	g_list = ww_redis_db.keys("g_list:*")
@@ -250,8 +265,7 @@ def broadcast_games():
 			for g_key in g_list:
 				g_id = str(g_key.decode("utf-8")).split(":")[1]
 				game = Game(g_id)
-
-				#games_dict[g_id] = str(len(game.players))
+				
 				games_dict["json"] = game.as_JSON()
 
 	data_dict["games"] = games_dict

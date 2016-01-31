@@ -17,12 +17,12 @@ function Game_Manager(){
 }
 
 Game_Manager.prototype.display = function(){
-	$("#games_list").html("<table>");
+	$("#games_list, #player_list").html("<table>");
 	for (game of this.games_list){
 		$("#game_list").append("<tr><td>"+game.g_id+"</td>");
-		$("#game_list").append("<td>"+game.players+"</td></tr>");
+		$("#player_list").append("<td>"+game.players+"</td></tr>");
 	}
-	$("#game_list").append("</table>");
+	$("#game_list, #player_list").append("</table>");
 }
 
 Game_Manager.prototype.add_game = function(game){
@@ -80,7 +80,7 @@ Game.prototype.display = function(){
 	$("#player_list").html("");
 	for (var player of this.players){
 		console.log(player);
-		//$("#player_list").append("<tr><td>"+player.p_id+"</td></tr>"));
+		$("#player_list").append("<tr><td>"+player.p_id+"</td></tr>");
 	}
 }
 
@@ -96,6 +96,59 @@ Player.prototype.update = function(json){
 	if ('state' in json){	this.state = json.state;	}
 }
 
+Player.prototype.message = function(msg, targetPID){
+	parameters = {"msg":msg, "target":targetPID, "session_key": session_key};
+	swampdragon.callRouter('messaging', 'lobby', parameters, function(context, data){
+		console.log(data);
+		$('#server_updates').prepend("<div class='message'>"+data+"</div>");
+	});
+}
+
+Player.prototype.receive_message = function(msg, sender, target, time){
+	var constructed = "";
+	constructed = "<div class=message_target_"+target+">["+time+"] "+sender+": "+msg+"</div>";
+	$("#chatbox_read").append(constructed);
+}
+
+
 game_manager = new Game_Manager();
 
-var player_list = [];
+myPlayer = new Player();
+
+var selected_players = [];
+
+
+// plugins
+// credit to adamb http://stackoverflow.com/a/13866517/2276412
+$.fn.extend({
+    editable: function() {
+        var that = this,
+            $edittextbox = $('<input type="text"></input>').css('min-width', that.width()),
+            submitChanges = function() {
+                that.html($edittextbox.val());
+                that.show();
+                that.trigger('editsubmit', [that.html()]);
+                $(document).off('click', submitChanges);
+                $edittextbox.detach();
+            },
+            tempVal;
+        $edittextbox.click(function(event) {
+            event.stopPropagation();
+        });
+
+        that.dblclick(function(e) {
+            tempVal = that.html();
+            $edittextbox.val(tempVal).insertBefore(that).off("keypress").on('keypress', function(e) {
+                if ($(this).val() !== '') {
+                    var code = (e.keyCode ? e.keyCode : e.which);
+                    if (code == 13) {
+                        submitChanges();
+                    }
+                }
+            });
+            that.hide();
+            $(document).one("click", submitChanges);
+        });
+        return that;
+    }
+});

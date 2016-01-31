@@ -49,4 +49,40 @@ h1{
 .message{
 	display:block;
 }
+
+#chatbox_read{
+	width:90%;
+	min-height:100px;
+	background-color:grey;
+	border:medium solid white;
+	border-radius:3px 3px 0px 0px;
+	padding:4px;
 }
+
+#chatbox_write{
+	width:90%;
+	height:20%;
+	background-color:grey;
+	padding:4px;
+	border:medium solid white;
+	border-radius:0px 0px 3px 3px;
+}
+
+#chatbox_target{
+	color:purple;
+	font-weight: bold;
+	margin-right:5px;
+	margin-left:2px;
+}
+
+#chatbox_target_id{
+	/*display:none;*/
+	color:blue;
+}
+
+#chatbox_msg
+
+.message_target_game, .message_target_world, .message_target_player{font-weight:bold; display:block;}
+.message_target_game{color:blue;}
+.message_target_world{color:green;}
+.message_target_player:{color:purple;}

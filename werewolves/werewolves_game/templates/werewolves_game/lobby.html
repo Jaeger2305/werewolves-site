@@ -27,7 +27,22 @@
 </div>
 
 <div class="general_container">
-	<div id="chatbox"></div>
+	<div id="chatbox_container">
+		<div id="chatbox_read">
+			Chat history
+		</div>
+		<div id="chatbox_write">
+			<select id="chatbox_target_list">
+				<option value="game">Game</option>
+				<option value="player">Player</option>
+				<option value="world" selected="selected">World</option>
+				<option></option>
+			</select>
+			<span id="chatbox_target">target</span>
+			<span id="chatbox_target_id"></span>
+			<span id="chatbox_msg">msg</span>
+		</div>
+	</div>
 </div>
 
 <div class="general_container">
@@ -57,6 +72,8 @@
 <script>
 console.log("working");
 
+session_key = "{{ response }}";
+
 <!-- Swampdragon -->
 swampdragon.onChannelMessage(function(channels, message){
 	if (message.data.channel === "lobbyinfo"){
@@ -71,12 +88,6 @@ swampdragon.onChannelMessage(function(channels, message){
 				var newGame = new Game(game_json);
 			}
 			game_manager.display();
-			
-			//$("#player_list").append("<tr><td>"+key+"</td>"+"<td>"+message.data.games[key]+"</td></tr>");
-			//$("#player_list tbody").children().last().on("click", {"g_id":key}, function(event){
-				//swampdragon.subscribe('lobby', 'player_list:'+event.data.g_id, {'output':'player_list', 'g_id':event.data.g_id}, null, null);
-				//swampdragon.callRouter('get_players', 'lobby', {'output':'player_list', 'g_id':event.data.g_id}, null, null);
-			//});
 		}
 	}
 	if (message.data.channel === "sysmsg"){
@@ -90,12 +101,19 @@ swampdragon.onChannelMessage(function(channels, message){
 		var myGame = game_manager.find(message.data.channel.split(":")[1]);
 		myGame.display();
 	}
+	if (message.data.type == "message")
+		myPlayer.receive_message(message.data.message, message.data.sender, message.data.target, message.data.time);
+	
 	console.log(message.data.channel);
 });
 
 swampdragon.ready(function(){
 	swampdragon.subscribe('lobby', 'default', {'session_key':$('#sessionID').html()}, null, null);
 	console.log("subscribed");
+
+	swampdragon.callRouter('init', 'lobby', {'session_key':session_key}, function(context, data){
+		console.log("message pushed locally: "+data);
+	});
 
 	$("#send_command").on("click", function(){
 		var data_dict = {message: $("#server_commands").html(), time: $.now()};
@@ -173,6 +191,29 @@ swampdragon.ready(function(){
 			$('#server_updates').prepend("<span class='message'>"+data+"</span>");
 		});
 	});
+});
+
+$("#chatbox_target_list").change(function(){
+	$("#chatbox_target").html($("#chatbox_target_list").val());
+});
+
+$("#chatbox_msg").editable().on('editsubmit', function (event, val) {
+    var parameters = {};
+
+    var target = $("#chatbox_target_list").val();
+
+    if ($("#chatbox_target_id").children().length == 0)
+    	parameters['id'] = $("#chatbox_target_id").html();
+
+    parameters['target'] = target;
+    parameters['msg'] = val;
+    parameters['session_key'] = session_key;
+    parameters['time'] = new Date().toJSON().slice(0,10);
+
+	swampdragon.callRouter('messaging', 'lobby', parameters, function(context, data){
+		console.log("message pushed locally: "+data);
+	});
+    
 });
 
 <!-- Session -->
