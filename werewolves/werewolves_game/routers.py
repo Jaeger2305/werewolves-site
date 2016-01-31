@@ -91,10 +91,6 @@
     # players
 
 # BUGS
-    # memory leak on game.py. I don't think it's clearing up the objects properly.
-    # This is demonstrated when you stop preventing duplicate p_id's into the g_list:* redis, found in game.py Game.save()
-        # aaaand it's back. I'm tired.
-        # I can either stop using the objects, or store them in a global pool, or look for how to clean them up right.
 
 # Production checklist
     # using DB session store, needs to be cleared out regularly in production https://docs.djangoproject.com/en/1.9/ref/django-admin/#django-admin-clearsessions
