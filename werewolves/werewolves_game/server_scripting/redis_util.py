@@ -23,16 +23,3 @@ I started doing the nitty gritty redis stuff, but the models should be easier on
 import redis
 
 ww_redis_db = redis.StrictRedis(host='localhost', port=6379, db=0)
-
-log = open("logfile.txt", "a")
-
-# not working, but might be adapted to iterate over a JSON like structure
-def convert(data):
-    if isinstance(data, basestring):
-        return str(data)
-    elif isinstance(data, collections.Mapping):
-        return dict(map(convert, data.iteritems()))
-    elif isinstance(data, collections.Iterable):
-        return type(data)(map(convert, data))
-    else:
-        return data

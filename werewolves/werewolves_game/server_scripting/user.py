@@ -1,15 +1,21 @@
+# user.location = ['ingame', 'kicked', 'searching', 'finished', 'outgame']
+# player.state = ['alive', 'dead']
+
 import redis
 import uuid
 import json
 import weakref
-from werewolves_game.server_scripting.redis_util import *
-import werewolves_game.server_scripting.game
-from tornado.ioloop import PeriodicCallback, IOLoop
-from swampdragon.pubsub_providers.data_publisher import publish_data
 
 from importlib import import_module
 from django.conf import settings
 SessionStore = import_module(settings.SESSION_ENGINE).SessionStore
+
+from tornado.ioloop import PeriodicCallback, IOLoop
+from swampdragon.pubsub_providers.data_publisher import publish_data
+
+import werewolves_game.server_scripting as wwss
+from werewolves_game.server_scripting.redis_util import *
+
 
 
 class User:
@@ -18,7 +24,7 @@ class User:
 	def __init__(self, p_id=None, session_key=None):
 		self.name = ""
 		self.g_history = []	# list of games just been in to assist matchmaking algorithm
-		self.status = ""
+		self.location = ""
 		self.session_key = ""
 
 		if session_key:
@@ -27,24 +33,22 @@ class User:
 			if 'p_id' in self.session:
 				p_id = self.session['p_id']
 
-		if p_id:
+		try:
 			self.p_id = p_id
-			try:
-				self.load(p_id)
-			except Exception as error:
-				print("couldn't load user's p_id from redis: "+str(error))
-				print("putting in default values")
+			self.load(p_id)
+		except Exception as error:
+			print("couldn't load user's p_id from redis: "+str(error))
+			print("putting in default values")
 
-				self.name = "Richard"
-				self.p_id = str(uuid.uuid4())
-				self.status = "outgame"
+			self.name = "Richard"
+			self.p_id = str(uuid.uuid4())
+			self.location = "outgame"
 
-				self.session['p_id'] = self.p_id
-				self.session['status'] = self.status
-				self.session.save()
+			self.session['p_id'] = self.p_id
+			self.session['location'] = self.location
+			self.session.save()
 
-				self.save()
-
+			self.save()
 
 	def __eq__(self, other):
 		return self.p_id == other.p_id
@@ -61,7 +65,7 @@ class User:
 		self.p_id = p_id
 		self.session_key = redis_player['session_key']
 		self.session = SessionStore(session_key=self.session_key)
-		self.status = redis_player['status']
+		self.location = redis_player['location']
 		self.g_history = (redis_player['g_history']).split("|")
 		
 		return True
@@ -69,7 +73,7 @@ class User:
 	def save(self):
 		ww_redis_db.hset("player_list:"+self.p_id, "session_key", self.session_key)
 		ww_redis_db.hset("player_list:"+self.p_id, "name", self.name)		# save player to redis DB (see redis_util for more info)
-		ww_redis_db.hset("player_list:"+self.p_id, "status", self.status)
+		ww_redis_db.hset("player_list:"+self.p_id, "location", self.location)
 		ww_redis_db.hset("player_list:"+self.p_id, "g_history", ("|").join(self.g_history))
 
 	def as_JSON(self, user_json={}):
@@ -86,8 +90,8 @@ class User:
 
 		if (	'game' in kwargs['groups'] and
 				'g_id' in self.session and
-				'status' in self.session and
-				self.session['status'] == "ingame"
+				'location' in self.session and
+				self.session['location'] == "ingame"
 			):
 			channel = 'game:'+self.session['g_id']
 		elif 'player' in kwargs['groups'] and 'p_id' in kwargs:
@@ -135,10 +139,10 @@ class Player(User):
 			self.state = redis_player['state']
 		if 'g_id' in redis_player:
 			self.g_id = redis_player['g_id']
-			self.game = weakref.ref(Game())
+			print("game added as weak ref for Player")
+			self.game = weakref.ref(Game(g_id))
 
 		return super().load(p_id, redis_player)
-
 
 	def save(self):
 		super().save()
@@ -156,10 +160,10 @@ class Player(User):
 		result = {}
 
 		if 'g_id' in kwargs:
-			game = werewolves_game.server_scripting.game.Game(kwargs['g_id'])
+			game = wwss.game.Game(kwargs['g_id'])
 		elif 'g_id' in self.session:
-			game = werewolves_game.server_scripting.game.Game(self.session['g_id'])
-		elif self.session.has_key("status") and self.session['status'] == "outgame":
+			game = wwss.game.Game(self.session['g_id'])
+		elif self.session.has_key("location") and self.session['location'] == "outgame":
 			result['error'] = "Player not currently in a game."
 			return result
 		else:
@@ -173,7 +177,7 @@ class Player(User):
 			result['error'] = "Player not found in game: "+game.g_id
 		
 		if 'g_id' in self.session:
-			self.session['status'] = "outgame"
+			self.session['location'] = "outgame"
 			#self.session.pop('g_id', None)
 			self.session.save()
 
@@ -184,7 +188,7 @@ class Player(User):
 	def find_game(self, **kwargs):
 		found_game = False
 
-		if 'g_id' in self.session and 'status' in self.session and self.session['status'] == 'ingame':
+		if 'g_id' in self.session and 'location' in self.session and self.session['location'] == 'ingame':
 			return {'text':"already ingame",
 					'g_id':self.session['g_id']}
 
@@ -215,22 +219,20 @@ class Player(User):
 				# find game with least spaces
 				for g_key in g_list:
 					g_id = str(g_key.decode("utf-8")).split(":")[1]
-					game = werewolves_game.server_scripting.game.Game(g_id)
+					game = wwss.game.Game(g_id)
 					if len(game.players) < 10:
-						game.add_player(self.p_id)
+						game.add_player(player=self)
 						
-
 						found_game = True
 						result['text'] = "found most space game"
 						break
 
 		if not found_game:
 			# start new game
-			game = werewolves_game.server_scripting.game.Game()
+			game = wwss.game.Game()
 			game.name = "mynewgame"
 			game.g_round = "1"
-			#newGame.players.append(self.p_id)
-			game.add_player(self.p_id)
+			game.add_player(player=self)
 			
 
 			g_id = game.g_id
@@ -241,7 +243,7 @@ class Player(User):
 			result['text'] += ". Populated with AI."
 
 		self.session['g_id'] = g_id
-		self.session['status'] = "ingame"
+		self.session['location'] = "ingame"
 		self.session.save()
 
 		result['g_id'] = self.session['g_id']

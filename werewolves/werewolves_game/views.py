@@ -36,12 +36,3 @@ def session_view(request):
 		"response":"Session expiry updated: "+str(session_key),
 	}
 	return JsonResponse(payload)
-
-
-from django.views.generic import ListView
-from .models import Notification
-
-def notif_view(request):
-	notification_list = Notification.objects.order_by('-pk')[:5]
-	context = {'object_list':notification_list}
-	return render(request, 'werewolves_game/home2.html', context)

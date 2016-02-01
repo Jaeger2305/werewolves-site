@@ -1,7 +1,6 @@
 # Tutorial... sort of
     # define your routers with a minimal route name, model and get_object/query_set
     # this is where the magic happens. In the front end javascript, I can call functions directly from the router, it's my main way of interacting with the server
-    # You can use models to automate it, but I've chosen to go full manual using just the BaseRouter. The models were confusing.
     # it works both ways, I can send info to the router, which it can deal with and respond to. Security is obviously a big deal, never accept anything from the user without escaping the data!
 
     # to exchange data with the server, you can use the publish_data function (check game.py). This selects a channel and gives it a data_dict.
@@ -19,10 +18,6 @@
         # <object>.TAB = list methods/properties
 
         # this method doesn't work for ajax requests, but I guess you should KISS it anyway
-
-        # can also writ to file if you have to
-            #with open('logfile.txt', 'a') as log:
-                #log.write(str(kwargs)+" are the kawrgs for get subscription channels\n")
 
     # Sessions
         # AJAX feeds lifepulse every 25 seconds from client
@@ -49,48 +44,42 @@
     # It's possible to publish to channels you're not subscribed to.
         #That means whenever publishing info, it needs to be check server side that you're allowed to do that. Yawn.
 
-# TODO
+# TODO Python
     # Write list of subscribed channels I want to listen to in .txt
         # my game, the lobby, system messages, specific groups of players (werewolves/merlin etc), whispers
     # implement timeout for users in games and for the games themselves
         # ignore check_activity, I want the sessions to last 2 weeks, but can cleanup based on differing times of session['latest activity']
-    # work out how to identify other players. Player ID's would need to be open, but I'd need to look up session data based on p_id :S
-    # read this awesome post http://mrjoes.github.io/2013/06/21/python-realtime.html
-    # feedback a countdown to game beginning to user, which starts immediate based on if all users have input "ready"
-        # this requires retaining the callback ID for the iol and cancelling it
-        # maybe add a state to the player class
-    # use an object pool for the game so I don't have to keep allocating variables, or I could just rely on the redis cache.
-    # callback queue class? Component in Player, Game etc.
-    # messaging class? Component
-    # a redis save/load static function class which accepts key and inputs in the form of a string and dict? Called by the classes that are saved to redis
-    # privatise variables/add static functions
-    # when game_state is called, create character specific objects.
-        # Look at using a factory to generate different objects?    http://code.activestate.com/recipes/86900/
-    # move periodic callbacks to a contained class
-    # implement serialisation of objects http://stackoverflow.com/questions/3768895/python-how-to-make-a-class-json-serializable
+    # use an object pool for the game so I don't have to keep allocating variables, or I could just rely on the redis cache?
+    # Ask SO if conversion from PCB to celery/CRON is really necessary
 
-    # Currently working on game.py Player class
-        # Implement serialisers for the character classes (only player/user/game done)
-        # add a filter method to hide data based on character status
-        # have a standard parameter object to extend? Always contains session data for example on the client side JS
+# Isolated possible commits
+    # If last player in game (ie players = 0), delete game from redis too
+    # create a static redis class for manipulation
+    # move periodic and other delayed callbacks to a contained singleton class
+    # finish serialisation of objects http://stackoverflow.com/questions/3768895/python-how-to-make-a-class-json-serializable
+    # Create a callback_queue class and component into game
+    # Create a messaging class and component into users http://gameprogrammingpatterns.com/component.html
+    # Make Player a component of User
+    # look for methods which should/could be static
+    # filter data so real information is given to select in the know groups
+    # add names to users
+    # allow manual creation of a game based on JS input
+
+# TODO JS
+    # work out how to identify other players from JS. Player ID's would need to be open, but I'd need to look up session data based on p_id :S
+    # handle events from game.state
+    # handle deserialisation of objects
+    # have a standard parameter object to extend? Always contains session data for example on the client side JS
     # handle connection if player closes browser/session ends (started with the pulse_activity ajax)
-    # convert from PCB to celery/CRON jobs? http://celery.readthedocs.org/en/latest/userguide/periodic-tasks.html
-        # Or ask Stack overflow if this is really necessary
-    # possible I add a flag to the objects, so at the end of a router, if the object's flag says update, I then save it to redis. Or i input it into the __del__ function
-    # or I add custom redis saves that doesn't do the whole thing again. Still, not a lot for python to do to just serialise relatively small objects
-    # timeout implemented by accessing iol from tornado.ioloop. This singleton would not be threadsafe, but the server runs on just one thread by default. Might have issues with scaling though
-    # look into using swampdragon's session store? http://swampdragon.net/documentation/sessions/
-
-# player.status = ['ingame', 'kicked', 'searching', 'finished', 'outgame']
-# game.state = ['voting', 'lobby', 'discussion', 'starting']
-
-# outline the different html elements I'll have for a rough idea where the information I'm giving is going to go
-    # chatbox
-    # events
-    # timers
-    # players
+    # provide form for creating a custom game
 
 # BUGS
+    # creating players does not reference their game properly. Look at their init functions
+    # loading events will cause extra empty events due to split and join functions
+    # Events fall down when called by a character class. This is solved by referencing the game players and not independently instantiated.
+        # alternatively, properly referencing the game within the player should do it
+        # possible a function returning the player given an ID makes for mroe flexibility.
+    # circular reference in as_JSON detected when 2 players join ln 158
 
 # Production checklist
     # using DB session store, needs to be cleared out regularly in production https://docs.djangoproject.com/en/1.9/ref/django-admin/#django-admin-clearsessions
@@ -105,25 +94,17 @@
     # characters, rounds and event progression
     # track user logins
 
-from swampdragon import route_handler
-from swampdragon.route_handler import ModelPubRouter, BaseRouter
-from werewolves_game.models import Notification
-from werewolves_game.serializers import NotificationSerializer
-from werewolves_game.server_scripting.game import *     # bad practice
-from werewolves_game.server_scripting.user import Player, User
-from werewolves_game.server_scripting.redis_util import *
-
 from django.contrib.sessions.models import Session # redundant? Temp using it in session_handling
-
 from importlib import import_module
 from django.conf import settings
 SessionStore = import_module(settings.SESSION_ENGINE).SessionStore
 
-class NotificationRouter(ModelPubRouter):
-    route_name = 'notifications'
-    valid_verbs = ['subscribe']
-    model = Notification
-    serializer_class = NotificationSerializer
+from swampdragon import route_handler
+from swampdragon.route_handler import ModelPubRouter, BaseRouter
+
+from werewolves_game.server_scripting.game import *     # bad practice
+from werewolves_game.server_scripting.user import Player, User
+from werewolves_game.server_scripting.redis_util import *
 
 class GameRouter(BaseRouter):
     route_name = 'game'
@@ -131,7 +112,7 @@ class GameRouter(BaseRouter):
 
 class LobbyRouter(BaseRouter):
     route_name = 'lobby'
-    valid_verbs = BaseRouter.valid_verbs + ['messaging', 'session_handling', 'init', 'matchmaking']
+    valid_verbs = BaseRouter.valid_verbs + ['messaging', 'session_handling', 'init', 'matchmaking', 'vote']
 
     # all published methods pass through this func, the returned array of strings are the channels the messages are broadcast on.
     # defaults to first element (lobbyinfo)
@@ -193,12 +174,14 @@ class LobbyRouter(BaseRouter):
         if kwargs['action'] == "flush_db":
             ww_redis_db.flushall()     # use to clear redis of all keys to start afresh
             session_data.flush()
-            response = "flushed!"
+            self.send("flushed!")
+            return
 
         if "p_id" in session_data:
             player = Player(session_data['p_id'])
         else:
             print("error: p_id not been assigned to session")
+            raise TypeError
 
         if kwargs['action'] == "join_game":
             response = player.find_game(**kwargs)
@@ -253,6 +236,5 @@ class LobbyRouter(BaseRouter):
         raise NotImplementedError
 
 # register router
-route_handler.register(NotificationRouter)
 route_handler.register(LobbyRouter)
 route_handler.register(GameRouter)

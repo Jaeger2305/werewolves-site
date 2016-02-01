@@ -1,47 +1,28 @@
-''' header
+''' game.py - handles Game()
 
-	all functions and classes involving the python side of the application
+	game.state = ['voting', 'lobby', 'discussion', 'starting']
 
-	data is stored and accessed from redis
-	instances of the classes are created from redis
-	to modify the object data:
-		myObj = Object(id)
-		# do stuff...
-		myObj.save()
-
-	the individual functions are called from routers.py and either return information there, or broadcast it via PeriodicCallback()
-
-	Most routers initialise a class found here and accesses it's functions
-
-	Current class inheritance:
-
-	event
-	game
-	user
-		player
-			character
-				Werewolf_Witch_Mystic_etc
+	Event
+	Game
+	User
+		Player
+			Character
+				Werewolf, Human, Witch, Mystic_etc
 		Meta information (score, friends)
-
-	Class for handling sessions? all the data that can be held in a session, makes it easy for us to manipulate
-	And a debugging class that ties codes to messages?
-	Messaging class?
-
-	Variables should be privatised!!
-
-	component out the messaging system from player? http://gameprogrammingpatterns.com/component.html
-	create a factory for the game
 '''
-# If last player in game (ie players = 0), delete game from redis too
-
+import warnings
 import redis
 import uuid
 import json
 import weakref
-from werewolves_game.server_scripting.redis_util import *		# for the ww_redis_handler. Redudundant for that purpose, it should be found in the swampdragon file redis_publisher
+from random import shuffle
+from math import ceil
+
+from werewolves_game.server_scripting.redis_util import *		# for the ww_redis_handler. Redundant for that purpose, it should be found in the swampdragon file redis_publisher
 import werewolves_game.server_scripting.user as user
-from werewolves_game.server_scripting.characters import Human, Werewolf, Witch, CharacterFactory
-from werewolves_game.server_scripting.event import EventFactory
+from werewolves_game.server_scripting.characters import Human, Werewolf, Witch, Character, CharacterFactory
+import werewolves_game.server_scripting as wwss
+import werewolves_game.server_scripting.event as event
 
 from tornado.ioloop import PeriodicCallback, IOLoop
 from swampdragon.pubsub_providers.data_publisher import publish_data
@@ -49,10 +30,7 @@ from swampdragon.pubsub_providers.data_publisher import publish_data
 from importlib import import_module
 from django.conf import settings
 SessionStore = import_module(settings.SESSION_ENGINE).SessionStore
-from django.contrib.sessions.models import SessionStore		# redundant to have both?
 
-from random import shuffle
-from math import ceil
 
 class GameManager:
 	def __init__(self):
@@ -65,12 +43,11 @@ class Game:
 		self.name = "Richard's room"
 		self.g_round = 0
 		self.players = []	# list of Players
-		self.state = "matchmaking"
+		self.state = "matchmaking"	# default. Currently unused
 		self.saved = False		# async issues?
-		self.history = []	# list of Events
-		self.callback_queue = {}
+		self.callback_queue = {}	# handlers for async 
 		self.event_queue = []	# events waiting to happen. Triggered based on Game.state
-		self.event_history = []
+		self.event_history = []	# past events
 		self.options = {	'max_players': 2,
 							'fortune_teller': False,
 							'witch': False	}
@@ -102,11 +79,32 @@ class Game:
 		ww_redis_db.hset("g_list:"+self.g_id, "name", self.name)
 		ww_redis_db.hset("g_list:"+self.g_id, "round", self.g_round)
 		ww_redis_db.hset("g_list:"+self.g_id, "state", self.state)
+		
 		players_string = ""
 		if len(self.players) > 0:
 			players_string = "|".join(self.get_player_ids())
-
 		ww_redis_db.hset("g_list:"+self.g_id, "players", players_string)
+
+		print("events are messy and there's duplicate code here. Event handler class needed as component")
+		
+		cur_events_string = ""
+		if self.event_queue:
+			cur_events_string = "|".join([event.e_id for event in self.event_queue])
+		ww_redis_db.hset("g_list:"+self.g_id, "curevents", cur_events_string)
+		
+		old_events_string = ""
+		if self.event_history:
+			old_events_string = "|".join([event.e_id for event in self.event_history])
+		ww_redis_db.hset("g_list:"+self.g_id, "curevents", old_events_string)
+
+		for event in self.event_queue:
+			event.save()
+
+		for event in self.event_history:
+			event.save()
+
+		for player in self.players:
+			player.save()
 
 		games_dict = {}
 		data_dict = {}
@@ -135,7 +133,7 @@ class Game:
 			for p_id in player_ids:
 				if p_id not in self.get_player_ids():
 					player = user.Player(p_id)
-					self.players.append(CharacterFactory.create_character(player.character))
+					self.players.append(CharacterFactory.create_character(player.character, p_id=player.p_id))
 		else:
 			self.players = []
 
@@ -155,7 +153,7 @@ class Game:
 
 		game_json['players'] = players_json
 		game_json['state'] = self.state
-		game_json['history'] = self.history
+		game_json['history'] = self.event_history
 
 		return json.dumps(game_json, default=lambda o: o.__dict__, sort_keys=True, indent=4)
 
@@ -173,34 +171,24 @@ class Game:
 		return self.players
 
 	def get_player_ids(self):
-		id_list = []
-		for player in self.players:
-			id_list.append(player.p_id)
-
-		return id_list
+		return [player.p_id for player in self.players]
 
 	def get_group(self, selectors):
 		# loop through self.players and remove those that don't fit the group as an array
 		group_list = self.players
 
 		for selector in selectors:
-			# selecting based on player.status
-			if selector == "alive" or selector == "dead":
-				group_list = [player for player in group_list if player.status == selector]
+			# selecting based on player.state
+			if selector in ("alive", "dead", "dying"):
+				group_list = [player for player in group_list if player.state == selector]
 
 			# selecting based on last event
-			if selector == "last_result":
+			elif selector == "last_result":
 				group_list = [player for player in group_list if player in self.event_history[0].result_subjects]
-				# for player in group_list:
-				# 	if player not in self.event_history[0].result_subjects:
-				# 		self.players.remove(player)
 
 			# selecting based on Class type
-			if isinstance(selector, Character):
+			elif issubclass(selector, Character):
 				group_list = [player for player in group_list if isinstance(player, selector)]
-				# for player in self.players:
-				# 	if not isinstance(player, selector):
-				# 		group_list.remove(player)
 
 			# selecting based on Class type from string
 			elif isinstance(selector, str):
@@ -232,7 +220,8 @@ class Game:
 			self.players[x].character = "human"
 
 		for i, player in enumerate(self.players):
-			self.players[i] = ().create_character(player.character, p_id=player.p_id)
+			self.players[i] = CharacterFactory.create_character(player.character, p_id=player.p_id)
+			self.players[i].game = weakref.ref(self)	# raises errors if actions done on characters not through the game
 			self.players[i].save()
 			print(player.character)
 
@@ -240,31 +229,37 @@ class Game:
 		self.state = state
 
 		if state == "ready":
+			print("game starting")
 			self.assign_roles()
 			self.change_state("waiting")
 			return
 
 		if state == "waiting":	# if no other events, start a new round
+			print("nothing happening. Starting a new night/day cycle")
 			self.g_round += 1
-			night = EventFactory.create_event("night", self)
+			night = event.EventFactory.create_event("night", self)
 			self.event_queue.append(night)
 
-			day = EventFactory.create_event("day", self)
-			self.event_queue.append(day)
+			warnings.warn("day event not done yet")
+			# day = EventFactory.create_event("day", self)
+			# self.event_queue.append(day)
 			self.change_state("new_event")
 			return
 
 		if state == "new_event":
 			# publish data to players
+			print("new event starting: " + self.event_queue[0].e_type)
 			self.event_queue[0].start()
-			raise NotImplementedError
+			warnings.warn("NOT broadcasted to user")
 
 		if state == "finished_voting":
+			print("Votes collected, performing result")
 			self.event_queue[0].finish_event()
 			raise NotImplementedError
 
 		if state == "game_finished":
 			#save to DB, kick all players etc.
+			print("Game over")
 			raise NotImplementedError
 
 		data_dict = {}
@@ -285,11 +280,11 @@ class Game:
 		return winners
 
 	def add_player(self, p_id=None, player=None):
-		if not p_id:
+		if p_id:
 			player = user.Player(p_id)
 		if player not in self.players:
 			# add a weakref to game
-			self.player.game_instance = weakref.ref(self)
+			player.game_instance = weakref.ref(self)
 			self.players.append(player)
 
 
