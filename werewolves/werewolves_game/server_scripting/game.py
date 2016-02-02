@@ -43,7 +43,7 @@ class Game:
 
 
 	def __init__(self, g_id=None, session_key=None, name="myRoom", options=None):
-		self.options = {	'max_players': 2,
+		self.options = {	'max_players': 4,
 							'mystic': False,
 							'witch': False	}
 		
@@ -87,8 +87,6 @@ class Game:
 		if self.players:
 			players_string = "|".join(self.get_player_ids())
 		ww_redis_db.hset("g_list:"+self.g_id, "players", players_string)
-
-		print("events are messy and there's duplicate code here. Event handler class needed as component")
 		
 		if self.event_queue:
 			cur_events_string = "|".join([event.e_id for event in self.event_queue])
@@ -131,6 +129,9 @@ class Game:
 		self.g_id = g_id
 		self.name = redis_game['name']
 		self.g_round = int(redis_game['g_round'])
+
+		# static method of redis_class split a "|" separated string and return initialised versions of each id
+		# needs refactoring somehow
 
 		if redis_game['players']:
 			player_ids = redis_game['players'].split('|')
@@ -209,14 +210,11 @@ class Game:
 			elif inspect.isclass(selector) and issubclass(selector, Character):
 				group_list = [player for player in group_list if isinstance(player, selector)]
 
-			# selecting based on Class type from string
+			# selecting based on uuid string
 			elif isinstance(selector, str):
-				for player in self.players:
-					print("no more eval for you")
-					#selector = eval(selector)
-					#if not isinstance(player, selector):
-						#group_list.remove(player)
-					raise TypeError
+				if uuid.UUID(selector, version=4):
+					group_list = [player.p_id for player in group_list if player.p_id in self.get_player_ids]
+					print("found p_id in game, returning player object")
 
 		return group_list
 
@@ -267,13 +265,13 @@ class Game:
 
 			newEvent = event.EventFactory.create_event(e_type, self)
 			self.event_queue.append(newEvent)
+			self.event_queue[0].start()
 			self.change_state("new_event")
 
 		if state == "new_event":
 			# publish data to players
 			print("new event starting: " + self.event_queue[0].e_type)
 			data_dict["event"] = self.event_queue[0].e_type
-			self.event_queue[0].start()
 
 		if state == "voting":
 			print("Waiting 10s to collect votes")
@@ -286,7 +284,7 @@ class Game:
 			#save to DB, kick all players etc.
 			winners = "These guys won: "
 			for group in self.game_end():
-				winners+group+", "
+				winners = winners+group+", "
 
 			print(winners)
 

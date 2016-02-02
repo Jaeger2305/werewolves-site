@@ -1,6 +1,7 @@
 import uuid
 import warnings
 from collections import Counter
+from random import shuffle
 
 from swampdragon.pubsub_providers.data_publisher import publish_data
 
@@ -17,7 +18,7 @@ class EventFactory():
 		if e_type == "night":
 			return Event(game, game.get_group([wwss.characters.Werewolf, "alive"]), game.get_group([wwss.characters.Human, "alive"]), cls.lookup_action(e_type), e_type)
 		if e_type == "day":
-			return Event(game, game.get_group([wwss.characters.Human, "alive"]), game.get_group([wwss.characters.Human, "alive"]), cls.lookup_action(e_type), e_type)
+			return Event(game, game.get_group([wwss.characters.Character, "alive"]), game.get_group([wwss.characters.Character, "alive"]), cls.lookup_action(e_type), e_type)
 		if e_type == "dying":
 			return Event(game, game.get_group([wwss.characters.Witch, "alive"]), game.get_group(["dead", "last_event"]), cls.lookup_action(e_type), e_type)
 		if e_type == "witch_save":
@@ -59,13 +60,13 @@ class Event():
 			self.result_subjects = []
 
 		self.e_id =  e_id
-
-		print("subjects of the event"+str(subjects))
-		print("instigators of the event:"+str(instigators))
 		return
 
 	def __del__(self):
 		self.save()
+
+	def __eq__(self, other):
+		return self.e_id == other.e_id
 
 	def save(self):
 		ww_redis_db.hset("event:"+self.e_id, "game", self.game.g_id)
@@ -96,6 +97,8 @@ class Event():
 		return EventFactory.event_from_redis(game, instigators, subjects, redis_event["e_type"], result_subjects, e_id)
 
 	def start(self):
+		print("subjects of the event"+str(self.subjects))
+		print("instigators of the event:"+str(self.instigators))
 		if not self.subjects or not self.instigators:
 			self.finish_event()
 
@@ -103,9 +106,11 @@ class Event():
 
 		if len(self.subjects) > 1 or len(self.instigators) > 1:
 			if len(self.subjects) != 1 and len(self.instigators) != 1:
+				print("holding votes, multiple options available")
 				self.hold_vote()
-		else:
+		elif len(self.subjects) == 1:
 			self.result_subjects = self.subjects
+			print("only 1 option, starting it immediately")
 			self.finish_event()
 
 	def hold_vote(self):
@@ -122,30 +127,44 @@ class Event():
 		for player in self.instigators:
 			publish_data("player:"+player.p_id, data_dict)
 
-		self.callback_handler = self.game.iol.call_later(10, self.vote_result)
+		self.callback_handler = self.game.iol.call_later(5, self.vote_result)
 
 	def add_vote(self, p_id):
 		# callrouter does this
+		print("Player just voted for: "+p_id)
 		self.votes.append(p_id)
 		if len(self.votes) == len(self.voters):
 			self.game.change_state("finished_voting")
 			game.iol.remove_timeout(self.callback_handler)
 
 	def vote_result(self):
-		self.result_subjects = Counter(self.votes).most_common(1)
-		self.game.change_state("finished_voting")
-		
+		if self.votes:
+			self.result_subjects = Counter(self.votes).most_common(1)
+		else:
+			shuffle(self.subjects)
+			print("No votes given, picking random:")
+			print(self.subjects[0])
+			self.result_subjects = [self.subjects[0]]
+			self.game.change_state("finished_voting")
+			return
+
 		print("most common vote was:")
 		print(Counter(self.votes).most_common(1))
-		return Counter(self.votes).most_common(1)
+		p_id_most_common = Counter(self.votes).most_common(1)
+
+		self.game.change_state("finished_voting")
+
+		self.result_subjects = [self.game.get_group([p_id_most_common])]
+		return
 
 	def finish_event(self):
-		if self.subjects and self.instigators:
+		print("result subjects of the event:"+str(self.result_subjects))
+		if self.result_subjects and self.instigators:		# only add to history if there is an effect
 			self.game.event_history.append(self)
 
 		self.game.event_queue.remove(self)
 		
-		for player in self.subjects:	# new events queued will be in reverse order to the order they were added to subjects
+		for player in self.result_subjects:	# new events queued will be in reverse order to the order they were added to subjects
 			result = self.action(player)
 			if result and isinstance(result, Event):
 				result = [result]
