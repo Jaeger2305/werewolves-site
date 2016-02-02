@@ -17,10 +17,9 @@ class EventFactory():
 		if e_type == "night":
 			return Event(game, game.get_group([wwss.characters.Werewolf, "alive"]), game.get_group([wwss.characters.Human, "alive"]), cls.lookup_action(e_type), e_type)
 		if e_type == "day":
-			raise NotImplementedError
 			return Event(game, game.get_group([wwss.characters.Human, "alive"]), game.get_group([wwss.characters.Human, "alive"]), cls.lookup_action(e_type), e_type)
 		if e_type == "dying":
-			return Event(game, game.get_group(["dying"]), game.get_group([wwss.characters.Witch, "alive"]), cls.lookup_action(e_type), e_type)
+			return Event(game, game.get_group([wwss.characters.Witch, "alive"]), game.get_group(["dead", "last_event"]), cls.lookup_action(e_type), e_type)
 		if e_type == "witch_save":
 			raise NotImplementedError
 			return Event(game, game.get_group([wwss.characters.Human]), game.get_group([wwss.characters.Witch]), cls.lookup_action(e_type), e_type)
@@ -29,8 +28,8 @@ class EventFactory():
 			return Event(game, game.get_group([wwss.characters.Character]), game.get_group([wwss.characters.Witch]), cls.lookup_action(e_type), e_type)
 
 	@classmethod
-	def event_from_redis(cls, game, instigators, subjects, e_type, votes, e_id):
-		return Event(game, e_type, instigators, subjects, result_subjects, lookup_action(e_type), votes, e_id)
+	def event_from_redis(cls, game, instigators, subjects, e_type, result_subjects, e_id):
+		return Event(game, instigators, subjects, cls.lookup_action(e_type), e_type, result_subjects, e_id)
 
 	@classmethod
 	def lookup_action(cls, e_type):
@@ -45,57 +44,68 @@ class EventFactory():
 # Handles broadcasting and vote hosting of the event
 # Need to add some method of controlling information
 class Event():
-	def __init__(self, game, instigators, subjects, action, e_type, votes=[], e_id=None):
+	def __init__(self, game, instigators, subjects, action, e_type, result_subjects=[], e_id=None):
 		self.subjects = subjects			# list of those the events affects
 		self.instigators = instigators		# list of those starting the event
 		self.action = action				# function that will implement the effect
 		self.game = game
 		self.e_type = e_type
-		self.votes = votes
+		self.result_subjects = result_subjects
+		self.votes = []
+		self.callback_handler = []
 
-		if e_id:	# from redis
-			self.result_subjects = self.vote_result()
-		else:
+		if not e_id:		# not from redis
 			e_id = str(uuid.uuid4())
 			self.result_subjects = []
-			self.callback_handler = []
 
 		self.e_id =  e_id
 
 		print("subjects of the event"+str(subjects))
 		print("instigators of the event:"+str(instigators))
-
 		return
 
+	def __del__(self):
+		self.save()
+
 	def save(self):
-		warnings.warn("splitting/joining of player values needs to be monitored for null values")
 		ww_redis_db.hset("event:"+self.e_id, "game", self.game.g_id)
 		ww_redis_db.hset("event:"+self.e_id, "e_type", self.e_type)
 		ww_redis_db.hset("event:"+self.e_id, "instigators", "|".join([player.p_id for player in self.instigators]))
 		ww_redis_db.hset("event:"+self.e_id, "subjects", "|".join([player.p_id for player in self.subjects]))
-		ww_redis_db.hset("event:"+self.e_id, "votes", "|".join(self.votes))
 		ww_redis_db.hset("event:"+self.e_id, "result_subjects", "|".join([player.p_id for player in self.result_subjects]))
 
 	@classmethod
 	def load(cls, game, e_id):
-		redis_event = ww_redis_db.hgetall("event:"+self.e_id)
+		redis_event = ww_redis_db.hgetall("event:"+e_id)
 		redis_event = {k.decode('utf8'): v.decode('utf8') for k, v in redis_event.items()}
 
-		instigators = redis_event["instigators"].split("|")
-		subjects = redis_event["subjects"].split("|")
-		votes = redis_event["votes"].split("")
+		instigators = subjects = result_subjects = []
+
+		if redis_event["instigators"]:
+			instigators = redis_event["instigators"].split("|")
+		if redis_event["subjects"]:
+			subjects = redis_event["subjects"].split("|")
+		if redis_event["result_subjects"]:
+			result_subjects = redis_event["result_subjects"].split("|")
 
 		# creates new users based on p_id. Not v memory efficient. Check p_ids with game.players and see if you can reference them?
 		instigators = [wwss.user.Player(p_id) for p_id in instigators]
 		subjects = [wwss.user.Player(p_id) for p_id in subjects]
+		result_subjects = [wwss.user.Player(p_id) for p_id in result_subjects]
 
-		return EventFactory.event_from_redis(game, instigators, subjects, redis_event["e_type"], votes, e_id)
+		return EventFactory.event_from_redis(game, instigators, subjects, redis_event["e_type"], result_subjects, e_id)
 
 	def start(self):
+		if not self.subjects or not self.instigators:
+			self.finish_event()
+
 		self.game.change_state("new event")
-		if len(self.subjects) > 1 and len(self.instigators) > 1:
-			self.hold_vote()
+
+		if len(self.subjects) > 1 or len(self.instigators) > 1:
+			if len(self.subjects) != 1 and len(self.instigators) != 1:
+				self.hold_vote()
 		else:
+			self.result_subjects = self.subjects
 			self.finish_event()
 
 	def hold_vote(self):
@@ -106,7 +116,7 @@ class Event():
 		for player in self.subjects:
 			data_dict["subjects"].append(player.as_JSON())
 
-		data_dict["description"] = self.description
+		data_dict["e_type"] = self.e_type
 		data_dict["channel"] = "event info"
 
 		for player in self.instigators:
@@ -130,16 +140,20 @@ class Event():
 		return Counter(self.votes).most_common(1)
 
 	def finish_event(self):
+		if self.subjects and self.instigators:
+			self.game.event_history.append(self)
+
+		self.game.event_queue.remove(self)
+		
 		for player in self.subjects:	# new events queued will be in reverse order to the order they were added to subjects
 			result = self.action(player)
+			if result and isinstance(result, Event):
+				result = [result]
 			if result and any(isinstance(e, Event) for e in result):
-				[self.event_queue.insert(0, event) for event in result if isinstance(event, Event)]		# adds events with the same order they were returned
-
-		self.game.event_history.append(self)
-		self.game.event_queue.remove(self)
+				[self.game.event_queue.insert(0, event) for event in result if isinstance(event, Event)]		# adds events with the same order they were returned
 
 		if self.game.game_end():
-			self.game.change_state("game finished")
+			self.game.change_state("game_finished")
 		elif len(self.game.event_queue) > 0:
 			self.game.event_queue[0].start()
 		else:

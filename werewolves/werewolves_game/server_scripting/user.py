@@ -66,6 +66,7 @@ class User:
 		self.session_key = redis_player['session_key']
 		self.session = SessionStore(session_key=self.session_key)
 		self.location = redis_player['location']
+		self.name = redis_player['name']
 		self.g_history = (redis_player['g_history']).split("|")
 		
 		return True
@@ -81,6 +82,7 @@ class User:
 		user_json['name'] = self.name
 		return json.dumps(user_json, default=lambda o: o.__dict__, sort_keys=True, indent=4)
 
+	# redundant
 	def push_message(self, **kwargs):
 		data_dict = {}
 		channel = ""
@@ -121,13 +123,16 @@ class Player(User):
 	# game specific class for interacting with the game class (join, interact with other players generally)
 
 	def __init__(self, p_id, session_key=None):
+		self.character = "unassigned"
+		self.state = "alive"
+
 		if session_key:
 			super().__init__(session_key=session_key)
 		else:
 			super().__init__(p_id=p_id)
-		
-		self.character = "unassigned"
-		self.state = "alive"
+
+	def __del__(self):
+		self.save()
 
 	def load(self, p_id):
 		redis_player = ww_redis_db.hgetall("player_list:"+str(p_id))
@@ -140,7 +145,7 @@ class Player(User):
 		if 'g_id' in redis_player:
 			self.g_id = redis_player['g_id']
 			print("game added as weak ref for Player")
-			self.game = weakref.ref(Game(g_id))
+			self.game = Game(g_id)
 
 		return super().load(p_id, redis_player)
 
@@ -148,7 +153,8 @@ class Player(User):
 		super().save()
 		ww_redis_db.hset("player_list:"+self.p_id, "state", self.state)
 		ww_redis_db.hset("player_list:"+self.p_id, "character", self.character)
-		#ww_redis_db.hset("player_list:"+self.p_id, "g_id", self.g_id)
+		if hasattr(self, 'g_id'):
+			ww_redis_db.hset("player_list:"+self.p_id, "g_id", self.g_id)
 
 	def as_JSON(self, player_json={}):
 		super().as_JSON(player_json)

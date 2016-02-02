@@ -51,14 +51,10 @@
 
 <div class="general_container">
 	<textarea rows="4" cols="60" id="server_commands">input commands here</textarea>
-	<div class="button" id="send_command">Click to send!</div>
 	<div class="button" id="quick_match">Quick match</div>
-	<div class="button" id="create_match">create_match</div>
 	<div class="button" id="leave_match">leave_match</div>
 	<div class="button" id="flush_db">Flush DB/session</div>
-	<div class="button" id="check_session">check_session</div>
-	<div class="button" id="del_session">del_session</div>
-	<div class="button" id="unsubscribe">unsubscribe to channel</div>
+	<div class="button" id="broadcast_games">Broadcast games</div>
 </div>
 
 <div class="hidden">
@@ -115,28 +111,11 @@ swampdragon.ready(function(){
 		console.log("message pushed locally: "+data);
 	});
 
-	$("#send_command").on("click", function(){
-		var data_dict = {message: $("#server_commands").html(), time: $.now()};
-		var msg = $("#server_commands").val();
-		swampdragon.callRouter('messaging', 'lobby', {'session_key':$('#sessionID').html(), msg: msg, groups:["game"]}, function(context, data){
-			console.log("message pushed locally: "+data);
-		});
-	});
-
 	$("#quick_match").on('click', function(){
 		swampdragon.callRouter('matchmaking', 'lobby', {'session_key':$('#sessionID').html(), 'action':'join_game'}, function(context, data){
 			swampdragon.subscribe('lobby', 'misc', {'session_key':$('#sessionID').html()}, null, null);
 			console.log(data);
 			$('#server_updates').prepend("<span class='message'>"+data.text+": "+data.g_id+"</span>");
-		});
-	});
-
-	$("#create_match").on('click', function(){
-		// call popup with parameters to fill out
-		var parameters = {};
-		swampdragon.callRouter('create_game', 'lobby', parameters, function(context, data){
-			console.log(data);
-			$('#server_updates').prepend("<span class='message'>"+data.g_id+"</span>");
 		});
 	});
 
@@ -163,33 +142,10 @@ swampdragon.ready(function(){
 			$('#server_updates').prepend("<span class='message'>"+data+"</span>");
 		});
 	});
-
-	$("#check_session").on('click', function(){
+	$("#broadcast_games").on('click', function(){
 		// call popup with parameters to fill out
-		var parameters = {'session_key': $('#sessionID').html(), 'action': 'check'};
-		swampdragon.callRouter('session_handling', 'lobby', parameters, function(context, data){
-			console.log(data);
-			$('#server_updates').prepend("<span class='message'>"+data+"</span>");
-		});
-	});
-
-	$("#del_session").on('click', function(){
-		// call popup with parameters to fill out
-		var parameters = {'session_key': $('#sessionID').html(), 'action': 'delete'};
-		swampdragon.callRouter('session_handling', 'lobby', parameters, function(context, data){
-			console.log(data);
-			$('#server_updates').prepend("<span class='message'>"+data+"</span>");
-		});
-	});
-
-	$("#unsubscribe").on('click', function(){
-		// call popup with parameters to fill out
-		var parameters = {'session_key': $('#sessionID').html(), 'action': 'unsubscribe'};
-		swampdragon.unsubscribe('lobby', 'game:'+'8b652596-ec5c-4392-976b-39d548483941', parameters, function(context, data){
-			console.log(data);
-			console.log("success");
-			$('#server_updates').prepend("<span class='message'>"+data+"</span>");
-		});
+		var parameters = {};
+		swampdragon.callRouter('broadcast_games', 'lobby', parameters, function(context, data){});
 	});
 });
 

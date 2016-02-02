@@ -51,6 +51,10 @@
         # ignore check_activity, I want the sessions to last 2 weeks, but can cleanup based on differing times of session['latest activity']
     # use an object pool for the game so I don't have to keep allocating variables, or I could just rely on the redis cache?
     # Ask SO if conversion from PCB to celery/CRON is really necessary
+    # __del__ not guaranteed to be called ever. Needs to be removed in favour of context managers
+        # save() calls put in __del__ as a backup, but manual calls should still be used when object is changed
+        # possible I implement atexits, although due to the self in self.save() it means they would be held in memory until process exits.
+    # convert load functions to classmethods
 
 # Isolated possible commits
     # If last player in game (ie players = 0), delete game from redis too
@@ -74,12 +78,8 @@
     # provide form for creating a custom game
 
 # BUGS
-    # creating players does not reference their game properly. Look at their init functions
-    # loading events will cause extra empty events due to split and join functions
-    # Events fall down when called by a character class. This is solved by referencing the game players and not independently instantiated.
-        # alternatively, properly referencing the game within the player should do it
-        # possible a function returning the player given an ID makes for mroe flexibility.
-    # circular reference in as_JSON detected when 2 players join ln 158
+    # unless DB flushed for all players prior, the event action fails due to improperly loaded Player. It's not generating the specific character like it should do.
+    
 
 # Production checklist
     # using DB session store, needs to be cleared out regularly in production https://docs.djangoproject.com/en/1.9/ref/django-admin/#django-admin-clearsessions
@@ -112,7 +112,7 @@ class GameRouter(BaseRouter):
 
 class LobbyRouter(BaseRouter):
     route_name = 'lobby'
-    valid_verbs = BaseRouter.valid_verbs + ['messaging', 'session_handling', 'init', 'matchmaking', 'vote']
+    valid_verbs = BaseRouter.valid_verbs + ['broadcast_games', 'messaging', 'session_handling', 'init', 'matchmaking', 'vote']
 
     # all published methods pass through this func, the returned array of strings are the channels the messages are broadcast on.
     # defaults to first element (lobbyinfo)
@@ -148,7 +148,6 @@ class LobbyRouter(BaseRouter):
         return channels
 
     def init(self, **kwargs):
-        broadcast_games()
         if "session_key" in kwargs:
             initUser = User(session_key=str(kwargs['session_key']))     # this ensures the user's session is stored with the p_id in redis, allowing subsequent calls to redis to require only the p_id
         else:
@@ -234,6 +233,9 @@ class LobbyRouter(BaseRouter):
 
     def vote(self, **kwargs):
         raise NotImplementedError
+
+    def broadcast_games(self, *kwargs):
+        return self.send(broadcast_games())
 
 # register router
 route_handler.register(LobbyRouter)

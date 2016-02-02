@@ -31,9 +31,13 @@ class Character(Player):
 		self.state = "alive"
 
 	def attacked_by_werewolves(self):
-		self.state = "dying"
+		self.state = "dead"
 		# returning an even here doesn't work yet. self.game isn't referenced properly
-		#return event.EventFactory.create_event("dying", self.game)
+		return event.EventFactory.create_event("dying", self.game)
+
+	def lynched(self):
+		self.state = "dead"
+		print(self.__class__.__name__ + " was killed by an angry mob")
 
 	def unique_ability_to_inherit(self):
 		raise NotImplementedError
