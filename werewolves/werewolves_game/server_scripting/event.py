@@ -1,5 +1,6 @@
 import uuid
 import warnings
+import weakref
 from collections import Counter
 from random import shuffle
 
@@ -49,7 +50,7 @@ class Event():
 		self.subjects = subjects			# list of those the events affects
 		self.instigators = instigators		# list of those starting the event
 		self.action = action				# function that will implement the effect
-		self.game = game
+		self.game = weakref.ref(game)		# game always references this event, and can recreate from redis if required, meaning a dangling reference here can be garbage collected.
 		self.e_type = e_type
 		self.result_subjects = result_subjects
 		self.votes = []
@@ -102,7 +103,7 @@ class Event():
 		if not self.subjects or not self.instigators:
 			self.finish_event()
 
-		self.game.change_state("new event")
+		self.game.change_state("new_event")
 
 		if len(self.subjects) > 1 or len(self.instigators) > 1:
 			if len(self.subjects) != 1 and len(self.instigators) != 1:
@@ -115,46 +116,31 @@ class Event():
 
 	def hold_vote(self):
 		self.game.change_state("voting")
-		data_dict = {}
-
-		data_dict["subjects"] = []
-		for player in self.subjects:
-			data_dict["subjects"].append(player.as_JSON())
-
-		data_dict["e_type"] = self.e_type
-		data_dict["channel"] = "event info"
-
-		for player in self.instigators:
-			publish_data("player:"+player.p_id, data_dict)
 
 		self.callback_handler = self.game.iol.call_later(5, self.vote_result)
 
 	def add_vote(self, p_id):
-		# callrouter does this
+		# callrouter should do this
 		print("Player just voted for: "+p_id)
 		self.votes.append(p_id)
 		if len(self.votes) == len(self.voters):
 			self.game.change_state("finished_voting")
-			game.iol.remove_timeout(self.callback_handler)
+			self.game.iol.remove_timeout(self.callback_handler)
 
 	def vote_result(self):
 		if self.votes:
-			self.result_subjects = Counter(self.votes).most_common(1)
+			p_id_most_common = Counter(self.votes).most_common(1)
+			print("most common vote was:") 
+			print(p_id_most_common)
+			self.result_subjects = [self.game.get_group([p_id_most_common])]
 		else:
 			shuffle(self.subjects)
 			print("No votes given, picking random:")
 			print(self.subjects[0])
 			self.result_subjects = [self.subjects[0]]
-			self.game.change_state("finished_voting")
-			return
-
-		print("most common vote was:")
-		print(Counter(self.votes).most_common(1))
-		p_id_most_common = Counter(self.votes).most_common(1)
 
 		self.game.change_state("finished_voting")
-
-		self.result_subjects = [self.game.get_group([p_id_most_common])]
+		self.finish_event()
 		return
 
 	def finish_event(self):
@@ -162,6 +148,7 @@ class Event():
 		if self.result_subjects and self.instigators:		# only add to history if there is an effect
 			self.game.event_history.append(self)
 
+		#import ipdb;ipdb.set_trace()
 		self.game.event_queue.remove(self)
 		
 		for player in self.result_subjects:	# new events queued will be in reverse order to the order they were added to subjects
@@ -171,9 +158,7 @@ class Event():
 			if result and any(isinstance(e, Event) for e in result):
 				[self.game.event_queue.insert(0, event) for event in result if isinstance(event, Event)]		# adds events with the same order they were returned
 
-		if self.game.game_end():
+		if self.game.get_winners():
 			self.game.change_state("game_finished")
-		elif len(self.game.event_queue) > 0:
-			self.game.event_queue[0].start()
 		else:
 			self.game.change_state("waiting")

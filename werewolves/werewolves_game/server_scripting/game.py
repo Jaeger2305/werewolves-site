@@ -242,6 +242,27 @@ class Game:
 			self.players[i].save()
 			print(player.character)
 
+	def start_game(self):
+		print("game starting")
+		self.assign_roles()
+		self.change_state("waiting")
+
+		print("First round: night dawns.")
+		
+		self.g_round += 1
+
+		newEvent = event.EventFactory.create_event("night", self)
+
+		self.event_queue.append(newEvent)	# should always be event_queue[0] if from scratch (problems if loaded from redis?)
+
+		self.change_state("new_event")
+		self.manage_event_queue()
+
+	def end_game(self):
+		raise NotImplementedError
+
+	# publishes data to channels based on current state
+	# needs to be complemented by a filter function
 	def change_state(self, state):
 		self.state = state
 		data_dict = {}
@@ -249,14 +270,52 @@ class Game:
 		if state == "lobby":
 			print("waiting for more players")
 
-		if state == "ready":
-			print("game starting")
-			self.assign_roles()
-			self.change_state("waiting")
+		if state == "waiting":
+			print("waiting for event (game.change_state")
 
-		if state == "waiting":	# if no other events, start a new round
-			print("nothing happening. Starting a new night/day cycle")
-			if self.g_round%2:
+		if state == "new_event":
+			print("new event starting: " + self.event_queue[0].e_type)
+			data_dict["event"] = self.event_queue[0].e_type
+
+		if state == "voting":
+			print("Waiting 10s to collect votes")
+
+			data_dict["subjects"] = []
+			for player in self.subjects:
+				data_dict["subjects"].append(player.as_JSON())
+
+			data_dict["e_type"] = self.e_type
+			data_dict["channel"] = "event info"
+
+			for player in self.instigators:
+				publish_data("player:"+player.p_id, data_dict)
+
+		if state == "finished_voting":
+			print("Votes collected, performing result")
+
+		if state == "game_finished":
+			#save to DB, kick all players etc.
+			winners = "These guys won: "
+			for group in self.get_winners():
+				winners = winners+group+", "
+
+			print("-------"+winners.upper()+"-------")
+
+
+		data_dict['state'] = state
+		data_dict['channel'] = "game:"+self.g_id
+
+		publish_data("game:"+self.g_id, data_dict)
+
+	def manage_event_queue(self):
+		if self.state == "game_end":
+			self.end_game()												# tidy up
+		elif self.state == "waiting" and self.event_queue:				# work through queue
+			print("event in the queue, we've been waiting to start")
+			self.event_queue[0].start()
+		elif not self.event_queue:										# add new event based on round
+			print("No event in queue, adding day/night")
+			if self.g_round % 2:
 				e_type = "night"
 			else:
 				e_type = "day"
@@ -265,36 +324,12 @@ class Game:
 
 			newEvent = event.EventFactory.create_event(e_type, self)
 			self.event_queue.append(newEvent)
-			self.event_queue[0].start()
-			self.change_state("new_event")
+		else:
+			print("event in progress, resetting callback but nothing changed")
 
-		if state == "new_event":
-			# publish data to players
-			print("new event starting: " + self.event_queue[0].e_type)
-			data_dict["event"] = self.event_queue[0].e_type
+		self.iol.call_later(5, self.manage_event_queue)					# permits constant callback. BUG: never cleaned up as I'm not saving the handler to remove from iol.
 
-		if state == "voting":
-			print("Waiting 10s to collect votes")
-
-		if state == "finished_voting":
-			print("Votes collected, performing result")
-			self.event_queue[0].finish_event()
-
-		if state == "game_finished":
-			#save to DB, kick all players etc.
-			winners = "These guys won: "
-			for group in self.game_end():
-				winners = winners+group+", "
-
-			print(winners)
-
-		
-		data_dict['state'] = state
-		data_dict['channel'] = "game:"+self.g_id
-
-		publish_data("game:"+self.g_id, data_dict)
-
-	def game_end(self):
+	def get_winners(self):
 		winners = ["humans", "werewolves"]
 
 		if self.get_group([Human, "alive"]):

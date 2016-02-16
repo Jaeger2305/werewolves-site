@@ -79,6 +79,7 @@
 
 # BUGS
     # unless DB flushed for all players prior, the event action fails due to improperly loaded Player. It's not generating the specific character like it should do.
+    # calling change state causes stacks of events on top of each other, resolving in an undefined order. Remove function calls other than publish data from the change_state
     
 
 # Production checklist
