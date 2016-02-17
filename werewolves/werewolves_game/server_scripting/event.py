@@ -50,7 +50,7 @@ class Event():
 		self.subjects = subjects			# list of those the events affects
 		self.instigators = instigators		# list of those starting the event
 		self.action = action				# function that will implement the effect
-		self.game = weakref.ref(game)		# game always references this event, and can recreate from redis if required, meaning a dangling reference here can be garbage collected.
+		self.game = game#weakref.ref(game)		# game always references this event, and can recreate from redis if required, meaning a dangling reference here can be garbage collected.
 		self.e_type = e_type
 		self.result_subjects = result_subjects
 		self.votes = []
@@ -91,9 +91,9 @@ class Event():
 			result_subjects = redis_event["result_subjects"].split("|")
 
 		# creates new users based on p_id. Not v memory efficient. Check p_ids with game.players and see if you can reference them?
-		instigators = [wwss.user.Player(p_id) for p_id in instigators]
-		subjects = [wwss.user.Player(p_id) for p_id in subjects]
-		result_subjects = [wwss.user.Player(p_id) for p_id in result_subjects]
+		instigators = [wwss.characters.CharacterFactory.create_character(character=None, p_id=p_id) for p_id in instigators]
+		subjects = [wwss.characters.CharacterFactory.create_character(character=None, p_id=p_id) for p_id in subjects]
+		result_subjects = [wwss.characters.CharacterFactory.create_character(character=None, p_id=p_id) for p_id in result_subjects]
 
 		return EventFactory.event_from_redis(game, instigators, subjects, redis_event["e_type"], result_subjects, e_id)
 
@@ -102,6 +102,7 @@ class Event():
 		print("instigators of the event:"+str(self.instigators))
 		if not self.subjects or not self.instigators:
 			self.finish_event()
+			return
 
 		self.game.change_state("new_event")
 
@@ -148,7 +149,6 @@ class Event():
 		if self.result_subjects and self.instigators:		# only add to history if there is an effect
 			self.game.event_history.append(self)
 
-		#import ipdb;ipdb.set_trace()
 		self.game.event_queue.remove(self)
 		
 		for player in self.result_subjects:	# new events queued will be in reverse order to the order they were added to subjects

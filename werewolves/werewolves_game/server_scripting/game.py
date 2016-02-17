@@ -255,8 +255,7 @@ class Game:
 
 		self.event_queue.append(newEvent)	# should always be event_queue[0] if from scratch (problems if loaded from redis?)
 
-		self.change_state("new_event")
-		self.manage_event_queue()
+		self.check_event_queue()
 
 	def end_game(self):
 		raise NotImplementedError
@@ -270,8 +269,11 @@ class Game:
 		if state == "lobby":
 			print("waiting for more players")
 
+		if state == "ready":
+			print("publishing ready info")
+
 		if state == "waiting":
-			print("waiting for event (game.change_state")
+			print("waiting for event")
 
 		if state == "new_event":
 			print("new event starting: " + self.event_queue[0].e_type)
@@ -280,14 +282,16 @@ class Game:
 		if state == "voting":
 			print("Waiting 10s to collect votes")
 
+			cur_event = self.event_queue[0]
+
 			data_dict["subjects"] = []
-			for player in self.subjects:
+			for player in cur_event.subjects:
 				data_dict["subjects"].append(player.as_JSON())
 
-			data_dict["e_type"] = self.e_type
+			data_dict["e_type"] = cur_event.e_type
 			data_dict["channel"] = "event info"
 
-			for player in self.instigators:
+			for player in cur_event.instigators:
 				publish_data("player:"+player.p_id, data_dict)
 
 		if state == "finished_voting":
@@ -307,13 +311,12 @@ class Game:
 
 		publish_data("game:"+self.g_id, data_dict)
 
-	def manage_event_queue(self):
-		if self.state == "game_end":
+	def check_event_queue(self):
+		if self.state == "game_finished":
 			self.end_game()												# tidy up
-		elif self.state == "waiting" and self.event_queue:				# work through queue
-			print("event in the queue, we've been waiting to start")
-			self.event_queue[0].start()
-		elif not self.event_queue:										# add new event based on round
+			return
+
+		if not self.event_queue:										# add new event based on round
 			print("No event in queue, adding day/night")
 			if self.g_round % 2:
 				e_type = "night"
@@ -324,10 +327,15 @@ class Game:
 
 			newEvent = event.EventFactory.create_event(e_type, self)
 			self.event_queue.append(newEvent)
+			self.change_state("new_event")
+		
+		if self.state == "new_event" or self.state == "waiting":				# work through queue
+			print("event in the queue, we've been waiting to start")
+			self.event_queue[0].start()
 		else:
 			print("event in progress, resetting callback but nothing changed")
 
-		self.iol.call_later(5, self.manage_event_queue)					# permits constant callback. BUG: never cleaned up as I'm not saving the handler to remove from iol.
+		self.iol.call_later(10, self.check_event_queue)					# permits constant callback. BUG: never cleaned up as I'm not saving the handler to remove from iol.
 
 	def get_winners(self):
 		winners = ["humans", "werewolves"]
@@ -351,7 +359,9 @@ class Game:
 
 		if len(self.players) >= self.options['max_players']:
 			print("Game full, starting now")
-			self.iol.call_later(3, self.change_state, "ready")
+			self.change_state("ready")
+			self.start_game()
+			#self.iol.call_later(3, self.change_state, "ready")
 
 		self.save()
 

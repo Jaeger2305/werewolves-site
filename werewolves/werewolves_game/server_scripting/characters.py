@@ -8,13 +8,17 @@ import werewolves_game.server_scripting.event as event
 class CharacterFactory:
 	@classmethod
 	def create_character(cls, character, **kwargs):
+		if character is None and p_id in kwargs:
+			myPlayer = Player(kwargs['p_id'])
+			character = myPlayer.character
+
 		if character == "unassigned":
 			warnings.warn("Character created with no role. Should not be initialised until player.character has been assigned via game.assign_roles(). Could lead to undefined behaviour if used ingame.")
 			return Character(**kwargs)
 		if character == "werewolf":
 			return Werewolf(**kwargs)
 		if character == "witch":
-			return Witch(*args)
+			return Witch(**kwargs)
 		if character == "human":
 			return Human(**kwargs)
 

@@ -55,6 +55,7 @@
         # save() calls put in __del__ as a backup, but manual calls should still be used when object is changed
         # possible I implement atexits, although due to the self in self.save() it means they would be held in memory until process exits.
     # convert load functions to classmethods
+    # convert Player() into its respective Character as a function?
 
 # Isolated possible commits
     # If last player in game (ie players = 0), delete game from redis too
