@@ -1,0 +1,188 @@
+{% load static swampdragon_tags %}
+
+<!DOCTYPE html>
+<html>
+
+<link rel="stylesheet" type="text/css" href="{% static 'werewolves_game/stylesheets/style.css' %}" />
+<script type="text/javascript" src="{% static 'werewolves_game/javascript/jquery-1.11.3.js' %}"></script>
+<script type="text/javascript" src="{% static 'werewolves_game/javascript/game.js' %}"></script>
+<script type="text/javascript" src="{% static 'werewolves_game/javascript/session.js' %}"></script>
+
+<h1>Werewolves the game</h1>
+
+<div class="general_container">
+	<div id="game_lobby">
+		<table id="game_list">
+			<tr><td>Name</td><td>Allegiance</td></tr>
+		</table>
+	</div>
+</div>
+
+<div class="general_container">
+	<div id="player_lobby">
+		<table id="player_list">
+			<tr><td>Name</td><td>Allegiance</td></tr>
+		</table>
+	</div>
+</div>
+
+<div class="general_container">
+	<div id="chatbox_container">
+		<div id="chatbox_read">
+			Chat history
+		</div>
+		<div id="chatbox_write">
+			<select id="chatbox_target_list">
+				<option value="game">Game</option>
+				<option value="player">Player</option>
+				<option value="world" selected="selected">World</option>
+				<option></option>
+			</select>
+			<span id="chatbox_target">target</span>
+			<span id="chatbox_target_id"></span>
+			<span id="chatbox_msg">msg</span>
+		</div>
+	</div>
+</div>
+
+<div class="general_container">
+	<div id="server_updates"></div>
+</div>
+
+<div class="general_container">
+	<textarea rows="4" cols="60" id="server_commands">input commands here</textarea>
+	<div class="button" id="quick_match">Quick match</div>
+	<div class="button" id="leave_match">leave_match</div>
+	<div class="button" id="flush_db">Flush DB/session</div>
+	<div class="button" id="broadcast_games">Broadcast games</div>
+	<div class="button" id="add_vote">add vote</div>
+</div>
+
+<div class="hidden">
+	<div id="sessionID">{{ response }}</div>
+</div>
+
+{% swampdragon_settings %}
+<script type="text/javascript" src="{% static 'swampdragon/js/dist/swampdragon.min.js' %}"></script>
+<script type="text/javascript" src="{% static 'swampdragon/js/dist/datamapper.js' %}"></script>
+
+<script>
+console.log("working");
+
+session_key = "{{ response }}";
+
+<!-- Swampdragon -->
+swampdragon.onChannelMessage(function(channels, message){
+	if (message.data.channel === "lobbyinfo"){
+		$("#game_list").html("");
+
+		for (var key in message.data.games){
+			game_json = JSON.parse(message.data.games.json);
+			game = game_manager.find(game_json.g_id);
+			if (game)
+				game.update(game_json);
+			else {
+				var newGame = new Game(game_json);
+			}
+			game_manager.display();
+		}
+	}
+	if (message.data.channel === "sysmsg"){
+		$("#server_updates").prepend("<span class='message'>"+message.data.message+"</span>");
+	}
+	if (message.data.channel === "player_list"){
+		console.log(message.data);
+	}
+	if (message.data.channel.startsWith("game")){
+		console.log(message.data);
+		var myGame = game_manager.find(message.data.channel.split(":")[1]);
+		myGame.display();
+	}
+	if (message.data.type == "message")
+		myPlayer.receive_message(message.data.message, message.data.sender, message.data.target, message.data.time);
+	
+	console.log(message.data.channel);
+});
+
+swampdragon.ready(function(){
+	swampdragon.subscribe('lobby', 'default', {'session_key':$('#sessionID').html()}, null, null);
+	console.log("subscribed");
+
+	swampdragon.callRouter('init', 'lobby', {'session_key':session_key}, function(context, data){
+		console.log("message pushed locally: "+data);
+	});
+
+	$("#quick_match").on('click', function(){
+		swampdragon.callRouter('matchmaking', 'lobby', {'session_key':$('#sessionID').html(), 'action':'join_game'}, function(context, data){
+			swampdragon.subscribe('lobby', 'misc', {'session_key':$('#sessionID').html()}, null, null);
+			console.log(data);
+			$('#server_updates').prepend("<span class='message'>"+data.text+": "+data.g_id+"</span>");
+		});
+	});
+
+	$("#leave_match").on('click', function(){
+		// call popup with parameters to fill out
+		var parameters = {'session_key': $('#sessionID').html(), 'action':'leave_game'};
+		swampdragon.callRouter('matchmaking', 'lobby', parameters, function(context, data){
+			var parameters = {	'session_key': $('#sessionID').html(),
+								'action': 'unsubscribe', 
+								'listener': 'game'};
+			swampdragon.unsubscribe('lobby', 'game', parameters, function(context, data){
+				console.log("unsubscription from game messages complete");
+				console.log(data);
+				$('#server_updates').prepend("<span class='message'>"+data+"</span>");
+			});
+		});
+	});
+
+	$("#flush_db").on('click', function(){
+		// call popup with parameters to fill out
+		var parameters = {'session_key': $('#sessionID').html(), 'action':'flush_db'};
+		swampdragon.callRouter('matchmaking', 'lobby', parameters, function(context, data){
+			console.log(data);
+			$('#server_updates').prepend("<span class='message'>"+data+"</span>");
+		});
+	});
+	$("#broadcast_games").on('click', function(){
+		// call popup with parameters to fill out
+		var parameters = {};
+		swampdragon.callRouter('broadcast_games', 'lobby', parameters, function(context, data){});
+	});
+	$("#add_vote").on('click', function(){
+		// call popup with parameters to fill out
+		var myVote = prompt("enter p_id", "xxx-xxx-xxx");
+		var parameters = {'vote':myVote};
+		if (parameters.vote != '')
+			swampdragon.callRouter('vote', 'lobby', parameters, function(context, data){});
+	});
+});
+
+$("#chatbox_target_list").change(function(){
+	$("#chatbox_target").html($("#chatbox_target_list").val());
+});
+
+$("#chatbox_msg").editable().on('editsubmit', function (event, val) {
+    var parameters = {};
+
+    var target = $("#chatbox_target_list").val();
+
+    if ($("#chatbox_target_id").children().length == 0)
+    	parameters['id'] = $("#chatbox_target_id").html();
+
+    parameters['target'] = target;
+    parameters['msg'] = val;
+    parameters['session_key'] = session_key;
+    parameters['time'] = new Date().toJSON().slice(0,10);
+
+	swampdragon.callRouter('messaging', 'lobby', parameters, function(context, data){
+		console.log("message pushed locally: "+data);
+	});
+    
+});
+
+<!-- Session -->
+pulse_handler();
+
+</script>
+
+</html>

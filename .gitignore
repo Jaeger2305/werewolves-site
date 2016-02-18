@@ -45,3 +45,13 @@ $RECYCLE.BIN/
 Network Trash Folder
 Temporary Items
 .apdisk
+
+*.pyc
+*.pyc
+werewolves/werewolves/__pycache__/settings.cpython-34.pyc
+*.pyc
+*.pyc
+werewolves/werewolves/__pycache__/settings.cpython-34.pyc
+werewolves/werewolves_game/migrations/__pycache__/0001_initial.cpython-34.pyc
+werewolves/werewolves_game/server_scripting/__pycache__/redis_util.cpython-34.pyc
+werewolves/werewolves_game/__pycache__/serializers.cpython-34.pyc
