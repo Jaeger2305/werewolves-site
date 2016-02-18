@@ -55,6 +55,7 @@
 	<div class="button" id="leave_match">leave_match</div>
 	<div class="button" id="flush_db">Flush DB/session</div>
 	<div class="button" id="broadcast_games">Broadcast games</div>
+	<div class="button" id="add_vote">add vote</div>
 </div>
 
 <div class="hidden">
@@ -146,6 +147,13 @@ swampdragon.ready(function(){
 		// call popup with parameters to fill out
 		var parameters = {};
 		swampdragon.callRouter('broadcast_games', 'lobby', parameters, function(context, data){});
+	});
+	$("#add_vote").on('click', function(){
+		// call popup with parameters to fill out
+		var myVote = prompt("enter p_id", "xxx-xxx-xxx");
+		var parameters = {'vote':myVote};
+		if (parameters.vote != '')
+			swampdragon.callRouter('vote', 'lobby', parameters, function(context, data){});
 	});
 });
 

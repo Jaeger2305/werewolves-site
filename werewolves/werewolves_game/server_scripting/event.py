@@ -55,6 +55,7 @@ class Event():
 		self.result_subjects = result_subjects
 		self.votes = []
 		self.callback_handler = []
+		self.action_without_instigators = False
 
 		if not e_id:		# not from redis
 			e_id = str(uuid.uuid4())
@@ -110,7 +111,8 @@ class Event():
 			if len(self.subjects) != 1 and len(self.instigators) != 1:
 				print("holding votes, multiple options available")
 				self.hold_vote()
-		elif len(self.subjects) == 1:
+		
+		if len(self.subjects) == 1:
 			self.result_subjects = self.subjects
 			print("only 1 option, starting it immediately")
 			self.finish_event()
@@ -146,7 +148,7 @@ class Event():
 
 	def finish_event(self):
 		print("result subjects of the event:"+str(self.result_subjects))
-		if self.result_subjects and self.instigators:		# only add to history if there is an effect
+		if self.result_subjects and (self.instigators or self.action_without_instigators):		# only add to history if there is an effect
 			self.game.event_history.append(self)
 
 		self.game.event_queue.remove(self)

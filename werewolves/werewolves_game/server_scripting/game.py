@@ -318,12 +318,13 @@ class Game:
 
 		if not self.event_queue:										# add new event based on round
 			print("No event in queue, adding day/night")
+
+			self.g_round += 1
+
 			if self.g_round % 2:
 				e_type = "night"
 			else:
 				e_type = "day"
-			
-			self.g_round += 1
 
 			newEvent = event.EventFactory.create_event(e_type, self)
 			self.event_queue.append(newEvent)

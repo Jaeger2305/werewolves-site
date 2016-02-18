@@ -56,6 +56,7 @@
         # possible I implement atexits, although due to the self in self.save() it means they would be held in memory until process exits.
     # convert load functions to classmethods
     # convert Player() into its respective Character as a function?
+    # write function to populate a game with a certain number of players?
 
 # Isolated possible commits
     # If last player in game (ie players = 0), delete game from redis too
@@ -234,6 +235,8 @@ class LobbyRouter(BaseRouter):
         #else:  # search through game given this grouping (witch, werewolf, humans etc.)
 
     def vote(self, **kwargs):
+        myGame = Game(session_data['g_id'])
+        myGame.event_queue[0].add_vote(kwargs['p_id'])
         raise NotImplementedError
 
     def broadcast_games(self, *kwargs):
