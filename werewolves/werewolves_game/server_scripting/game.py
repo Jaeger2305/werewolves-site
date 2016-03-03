@@ -168,12 +168,19 @@ class Game:
 		for player in self.players:
 			players_json[player.p_id] = player.as_JSON()
 
-		# event.as_JSON()
+		event_history_json = {}
+		for event in self.event_history:
+			event_history_json[event.e_id] = event.as_JSON()
+
+		event_queue_json = {}
+		for event in self.event_queue:
+			event_queue_json[event.e_id] = event.as_JSON()
+
 
 		game_json['players'] = players_json
 		game_json['state'] = self.state
-		#game_json['event_history'] = event_history_json		# .as_JSON not implemented yet
-		#game_json['event_queue'] = event_queue_json
+		game_json['event_history'] = event_history_json
+		game_json['event_queue'] = event_queue_json
 
 		return json.dumps(game_json, sort_keys=True, indent=4)
 

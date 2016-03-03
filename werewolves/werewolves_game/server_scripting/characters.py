@@ -73,6 +73,14 @@ class Witch(Human):
 	def __init__(self, **kwargs):
 		super().__init(**kwargs)
 		self.character = "witch"
+		self.used_heal = False
+		self.used_kill = False
+
+	def as_JSON(self, player_json={}):
+		super().as_JSON(player_json)
+		player_json['used_heal'] = self.used_heal
+		player_json['used_kill'] = self.used_kill
+		return json.dumps(player_json, default=lambda o: o.__dict__, sort_keys=True, indent=4)
 
 
 class Werewolf(Character):

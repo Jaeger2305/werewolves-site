@@ -1,0 +1,45 @@
+# Tutorial... sort of
+    # define your routers with a minimal route name, model and get_object/query_set
+    # this is where the magic happens. In the front end javascript, I can call functions directly from the router, it's my main way of interacting with the server
+    # it works both ways, I can send info to the router, which it can deal with and respond to. Security is obviously a big deal, never accept anything from the user without escaping the data!
+
+    # to exchange data with the server, you can use the publish_data function (check game.py). This selects a channel and gives it a data_dict.
+    # for the front end to access this data, the calling router must return the channel, which publish_data feeds the information through
+
+    # Debugging:
+        # pip install ipdb
+        # https://www.safaribooksonline.com/blog/2014/11/18/intro-python-debugger/
+        # import ipdb;ipdb.set_trace() (a breakpoint)
+        # this opens in console when hit, where you can view what variables are being used
+        # n[ext] goes to the next function
+        # a[rgs] for current arguments
+        # s[tep]
+        # c[ontinue]
+        # <object>.TAB = list methods/properties
+
+        # this method doesn't work for ajax requests, but I guess you should KISS it anyway
+
+    # Sessions
+        # AJAX feeds lifepulse every 25 seconds from client
+        # this reaches the session_handler view, which updates the session with latest access time
+        # this is complemented by a PCB at the bottom of game.py (check_activity()) which is called through the session_handler router
+            # the PCB cycles through all session data and deletes out of date ones, or alternatively a long time since the last life pulse
+            # this is expensive, so I'm not sure if it's a good way of doing it
+            # I could create a separate DB for players in game, and create a primary key for the sessions, then cycle through a JOIN table
+            # I could also subset players (logged in, in game, guest) and have separate times for them
+            # see http://stackoverflow.com/questions/235950/how-to-lookup-django-session-for-a-particular-user for helpful approaches
+
+    # overwrite the subscription method?
+    # bug: using channel as a key in the data dict passed in a subscribe call results in an empty kwarg. Very confusing.
+
+    # okay, user specific channels implemented.
+        # There are 3 aspects:
+            # subscribe to channel:id (javascript),
+            # publish to channel:id (game.py, publish_data()) and
+            # add the channel to the get_subscription_channels list
+    # get_subscription_channels is called whenever you [un]subscribe and filters what channels swampdragon has access to
+    # You can add to the subscribed channels by using params in JS subscribe
+    # Depending on the kwargs sent (javascript in subscribe/callrouter) you can dynamically filter
+    # annoyingly this forces you to store session data in JS to pass in as custom kwargs
+    # It's possible to publish to channels you're not subscribed to.
+        #That means whenever publishing info, it needs to be check server side that you're allowed to do that. Yawn.
