@@ -98,6 +98,37 @@ class Event():
 
 		return EventFactory.event_from_redis(game, instigators, subjects, redis_event["e_type"], result_subjects, e_id)
 
+	def as_JSON(self):
+		event_json = {}
+		event_json['e_id'] = self.e_id
+		event_json['e_type'] = self.e_type
+
+		event_json['instigators'] = self.e_type
+		event_json['subjects'] = self.e_type
+		event_json['result_subjects'] = self.e_type
+
+		instigators_json = {}
+		for player in self.instigators:
+			instigators_json[player.p_id] = player.as_JSON()	# causes duplication, but worth it?
+
+		subjects_json = {}
+		for player in self.subjects:
+			subjects_json[player.p_id] = player.as_JSON()
+
+		result_subjects_json = {}
+		for player in self.result_subjects:
+			result_subjects_json[player.p_id] = player.as_JSON()
+
+		event_json['votes'] = self.votes
+
+		# assuming event action can be inferred from e_type. Therefore not included in JSON.
+
+		event_json['instigators'] = instigators_json
+		event_json['subjects'] = self.subjects_json
+		event_json['result_subjects'] = self.result_subjects_json
+
+		return json.dumps(event_json, sort_keys=True, indent=4)
+
 	def start(self):
 		print("subjects of the event"+str(self.subjects))
 		print("instigators of the event:"+str(self.instigators))
