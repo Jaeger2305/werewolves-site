@@ -1,6 +1,7 @@
 import uuid
 import warnings
 import weakref
+import json
 from collections import Counter
 from random import shuffle
 
@@ -30,7 +31,7 @@ class EventFactory():
 			return Event(game, game.get_group([wwss.characters.Character]), game.get_group([wwss.characters.Witch]), cls.lookup_action(e_type), e_type)
 
 	@classmethod
-	def event_from_redis(cls, game, instigators, subjects, e_type, result_subjects, e_id):
+	def event_from_redis(cls, game, instigators, subjects, e_type, result_subjects, votes, e_id):
 		return Event(game, instigators, subjects, cls.lookup_action(e_type), e_type, result_subjects, e_id)
 
 	@classmethod
@@ -46,7 +47,7 @@ class EventFactory():
 # Handles broadcasting and vote hosting of the event
 # Need to add some method of controlling information
 class Event():
-	def __init__(self, game, instigators, subjects, action, e_type, result_subjects=[], e_id=None):
+	def __init__(self, game, instigators, subjects, action, e_type, result_subjects=[], votes=[], e_id=None):
 		self.subjects = subjects			# list of those the events affects
 		self.instigators = instigators		# list of those starting the event
 		self.action = action				# function that will implement the effect
@@ -75,6 +76,7 @@ class Event():
 		ww_redis_db.hset("event:"+self.e_id, "e_type", self.e_type)
 		ww_redis_db.hset("event:"+self.e_id, "instigators", "|".join([player.p_id for player in self.instigators]))
 		ww_redis_db.hset("event:"+self.e_id, "subjects", "|".join([player.p_id for player in self.subjects]))
+		ww_redis_db.hset("event:"+self.e_id, "votes", "|".join(self.votes))
 		ww_redis_db.hset("event:"+self.e_id, "result_subjects", "|".join([player.p_id for player in self.result_subjects]))
 
 	@classmethod
@@ -92,11 +94,16 @@ class Event():
 			result_subjects = redis_event["result_subjects"].split("|")
 
 		# creates new users based on p_id. Not v memory efficient. Check p_ids with game.players and see if you can reference them?
-		instigators = [wwss.characters.CharacterFactory.create_character(character=None, p_id=p_id) for p_id in instigators]
-		subjects = [wwss.characters.CharacterFactory.create_character(character=None, p_id=p_id) for p_id in subjects]
-		result_subjects = [wwss.characters.CharacterFactory.create_character(character=None, p_id=p_id) for p_id in result_subjects]
+		# instigators = [wwss.characters.CharacterFactory.create_character(character=None, p_id=p_id) for p_id in instigators]
+		# subjects = [wwss.characters.CharacterFactory.create_character(character=None, p_id=p_id) for p_id in subjects]
+		# result_subjects = [wwss.characters.CharacterFactory.create_character(character=None, p_id=p_id) for p_id in result_subjects]
 
-		return EventFactory.event_from_redis(game, instigators, subjects, redis_event["e_type"], result_subjects, e_id)
+		instigators = [self.game.get_group(p_id)[0] for p_id in instigators]
+		subjects = [self.game.get_group(p_id)[0] for p_id in subjects]
+		result_subjects = [self.game.get_group(p_id)[0] for p_id in result_subjects]
+		votes = redis_event["votes"]
+
+		return EventFactory.event_from_redis(game, instigators, subjects, redis_event["e_type"], result_subjects, votes, e_id)
 
 	def as_JSON(self):
 		event_json = {}
@@ -124,8 +131,8 @@ class Event():
 		# assuming event action can be inferred from e_type. Therefore not included in JSON.
 
 		event_json['instigators'] = instigators_json
-		event_json['subjects'] = self.subjects_json
-		event_json['result_subjects'] = self.result_subjects_json
+		event_json['subjects'] = subjects_json
+		event_json['result_subjects'] = result_subjects_json
 
 		return json.dumps(event_json, sort_keys=True, indent=4)
 

@@ -73,20 +73,7 @@ session_key = "{{ response }}";
 
 <!-- Swampdragon -->
 swampdragon.onChannelMessage(function(channels, message){
-	if (message.data.channel === "lobbyinfo"){
-		$("#game_list").html("");
-
-		for (var key in message.data.games){
-			game_json = JSON.parse(message.data.games.json);
-			game = game_manager.find(game_json.g_id);
-			if (game)
-				game.update(game_json);
-			else {
-				var newGame = new Game(game_json);
-			}
-			game_manager.display();
-		}
-	}
+	if (message.data.channel === "lobbyinfo"){}
 	if (message.data.channel === "sysmsg"){
 		$("#server_updates").prepend("<span class='message'>"+message.data.message+"</span>");
 	}
@@ -94,9 +81,21 @@ swampdragon.onChannelMessage(function(channels, message){
 		console.log(message.data);
 	}
 	if (message.data.channel.startsWith("game")){
-		console.log(message.data);
-		var myGame = game_manager.find(message.data.channel.split(":")[1]);
-		myGame.display();
+		// message.data.channel expected output is game:g_id
+		// if game:g_id:event
+		// else if game:g_id:player
+		// else update all
+		var game_json = JSON.parse(message.data.game.json);
+		console.log("game_json:");
+		console.log(game_json);
+		game = game_manager.find(game_json.g_id);
+		if (game)
+			game.update(game_json);
+		else {
+			var newGame = new Game(game_json);
+			game_manager.add_game(newGame);
+		}
+		game_manager.display();
 	}
 	if (message.data.type == "message")
 		myPlayer.receive_message(message.data.message, message.data.sender, message.data.target, message.data.time);

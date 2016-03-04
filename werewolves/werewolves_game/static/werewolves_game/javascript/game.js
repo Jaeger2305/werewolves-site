@@ -54,6 +54,8 @@ function Game(json, g_id, players, state){
 		g_id = json.g_id;
 		players = json.players;
 		state = json.state;
+		event_queue = json.event_queue;
+		event_history = json.event_history;
 	}
 
 	this.g_id = g_id;
@@ -120,6 +122,7 @@ var selected_players = [];
 
 // plugins
 // credit to adamb http://stackoverflow.com/a/13866517/2276412
+// makes a span editable on double click
 $.fn.extend({
     editable: function() {
         var that = this,

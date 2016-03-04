@@ -109,7 +109,7 @@ class Game:
 		data_dict = {}
 		games_dict["json"] = self.as_JSON()
 
-		data_dict["games"] = games_dict
+		data_dict["game"] = games_dict
 		data_dict["channel"] = "game:"+self.g_id
 
 		publish_data("game:"+self.g_id, data_dict)
@@ -313,10 +313,7 @@ class Game:
 			print("-------"+winners.upper()+"-------")
 
 
-		data_dict['state'] = state
-		data_dict['channel'] = "game:"+self.g_id
-
-		publish_data("game:"+self.g_id, data_dict)
+		self.save()
 
 	def check_event_queue(self):
 		if self.state == "game_finished":
@@ -406,9 +403,9 @@ def broadcast_games():
 				g_id = str(g_key.decode("utf-8")).split(":")[1]
 				game = Game(g_id)
 				
-				games_dict["json"] = game.as_JSON()
+				games_dict["game:"+g_id] = game.as_JSON()
 
-	data_dict["games"] = games_dict
+	data_dict["game"] = games_dict
 	data_dict["channel"] = "lobbyinfo"
 
 	publish_data("lobbyinfo", data_dict)
