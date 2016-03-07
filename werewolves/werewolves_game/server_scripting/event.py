@@ -1,6 +1,7 @@
 import uuid
 import warnings
 import weakref
+import json
 from collections import Counter
 from random import shuffle
 
@@ -59,7 +60,7 @@ class Event():
 
 		if not e_id:		# not from redis
 			e_id = str(uuid.uuid4())
-			self.result_subjects = []
+			self.result_subjects = []	# isn't this declared already above?
 
 		self.e_id =  e_id
 		return
@@ -124,8 +125,8 @@ class Event():
 		# assuming event action can be inferred from e_type. Therefore not included in JSON.
 
 		event_json['instigators'] = instigators_json
-		event_json['subjects'] = self.subjects_json
-		event_json['result_subjects'] = self.result_subjects_json
+		event_json['subjects'] = subjects_json
+		event_json['result_subjects'] = result_subjects_json
 
 		return json.dumps(event_json, sort_keys=True, indent=4)
 
