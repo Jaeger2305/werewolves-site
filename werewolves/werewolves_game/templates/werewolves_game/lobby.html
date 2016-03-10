@@ -56,6 +56,7 @@
 	<div class="button" id="flush_db">Flush DB/session</div>
 	<div class="button" id="broadcast_games">Broadcast games</div>
 	<div class="button" id="add_vote">add vote</div>
+	<div class="button" id="test_game">test game</div>
 </div>
 
 <div class="hidden">
@@ -153,6 +154,14 @@ swampdragon.ready(function(){
 		var parameters = {'vote':myVote};
 		if (parameters.vote != '')
 			swampdragon.callRouter('vote', 'lobby', parameters, function(context, data){});
+	});
+	$("#test_game").on("click", function(){
+		var player_count = prompt("enter number of players (this should match the server side hardcoded limit)", 4);
+		var parameters = {};
+		parameters['session_key'] = session_key;
+		parameters['player_count'] = player_count;
+		parameters['action'] = "test_game";
+		swampdragon.callRouter('developer', 'lobby', parameters, function(context, data){alert("done");});
 	});
 });
 

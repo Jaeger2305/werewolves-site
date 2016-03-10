@@ -43,6 +43,8 @@ class User:
 			self.name = "Richard"
 			self.p_id = str(uuid.uuid4())
 			self.location = "outgame"
+			self.session = SessionStore()
+			self.session_key = self.session.session_key
 
 			self.session['p_id'] = self.p_id
 			self.session['location'] = self.location
@@ -122,7 +124,7 @@ class User:
 class Player(User):
 	# game specific class for interacting with the game class (join, interact with other players generally)
 
-	def __init__(self, p_id, session_key=None):
+	def __init__(self, p_id=None, session_key=None):
 		self.character = "unassigned"
 		self.state = "alive"
 

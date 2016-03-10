@@ -16,7 +16,7 @@ class GameRouter(BaseRouter):
 
 class LobbyRouter(BaseRouter):
     route_name = 'lobby'
-    valid_verbs = BaseRouter.valid_verbs + ['broadcast_games', 'messaging', 'session_handling', 'init', 'matchmaking', 'vote']
+    valid_verbs = BaseRouter.valid_verbs + ['broadcast_games', 'messaging', 'session_handling', 'init', 'matchmaking', 'vote', 'developer']
 
     # all published methods pass through this func, the returned array of strings are the channels the messages are broadcast on.
     # defaults to first element (lobbyinfo)
@@ -56,6 +56,15 @@ class LobbyRouter(BaseRouter):
             initUser = User(session_key=str(kwargs['session_key']))     # this ensures the user's session is stored with the p_id in redis, allowing subsequent calls to redis to require only the p_id
         else:
             return self.send({"error":"no session key supplied"})
+
+    def developer(self, **kwargs):
+        if kwargs['action'] == "test_game":
+            for x in range(1,int(kwargs['player_count'])):
+                player = Player(session_key=User().session_key)
+                player.find_game()
+
+            myPlayer = Player(session_key=kwargs['session_key'])
+            myPlayer.find_game()
 
     def session_handling(self, **kwargs):
         if 'action' not in kwargs:

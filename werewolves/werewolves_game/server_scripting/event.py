@@ -60,7 +60,7 @@ class Event():
 
 		if not e_id:		# not from redis
 			e_id = str(uuid.uuid4())
-			self.result_subjects = []
+			self.result_subjects = []	# isn't this declared already above?
 
 		self.e_id =  e_id
 		return
