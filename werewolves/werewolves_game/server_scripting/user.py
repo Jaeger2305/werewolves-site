@@ -26,6 +26,9 @@ class User:
 		self.g_history = []	# list of games just been in to assist matchmaking algorithm
 		self.location = ""
 		self.session_key = ""
+		self.broadcastable = []
+
+		self.broadcastable.append("name", "location", "p_id")
 
 		if session_key:
 			self.session = SessionStore(session_key=session_key)
@@ -133,12 +136,16 @@ class Player(User):
 		self.character = "unassigned"
 		self.state = "alive"
 
+		if not p_id and not session_key:
+			raise ValueError("neither p_id or session_key supplied!")
+
 		if session_key:
 			super().__init__(session_key=session_key)
 		else:
 			super().__init__(p_id=p_id)
 
 		self.knows_about = {self.p_id:None}
+		self.broadcastable.append("character", "state")
 
 	def __del__(self):
 		self.save()	# not guaranteed to be called!
@@ -216,7 +223,7 @@ class Player(User):
 
 		# populate list with all keys if knows about everything (filter on None)
 		if self.knows_about[p_id] is None:
-			self.knows_about[p_id] = Player(p_id).__dict__.keys()	# could cause bugs - set up another list to contain attributes that are broadcastable?
+			self.knows_about[p_id] = Player(p_id).broadcastable
 
 		for attribute in attribute_filter:
 			self.knows_about[p_id].remove(attribute)
