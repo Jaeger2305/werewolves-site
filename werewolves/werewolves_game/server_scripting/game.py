@@ -159,10 +159,10 @@ class Game:
 		return True
 
 	def as_JSON(self):
-		game_json = {}
-		game_json['g_id'] = self.g_id
-		game_json['name'] = self.name
-		game_json['g_round'] = self.g_round
+		game_obj = {}
+		game_obj['g_id'] = self.g_id
+		game_obj['name'] = self.name
+		game_obj['g_round'] = self.g_round
 
 		players_json = {}
 		for player in self.players:
@@ -177,12 +177,27 @@ class Game:
 			event_queue_json[event.e_id] = event.as_JSON()
 
 
-		game_json['players'] = players_json
-		game_json['state'] = self.state
-		game_json['event_history'] = event_history_json
-		game_json['event_queue'] = event_queue_json
+		game_obj['players'] = players_json
+		game_obj['state'] = self.state
+		game_obj['event_history'] = event_history_json
+		game_obj['event_queue'] = event_queue_json
 
-		return json.dumps(game_json, sort_keys=True, indent=4)
+		return json.dumps(game_obj, sort_keys=True, indent=4)
+
+	# filters the players out of the json array dependent on what they know
+	def filter_JSON(game_json, filters):
+		import ipdb;ipdb.set_trace()
+		players_json = {}
+
+		knows_about = self.get_group(filters.keys())
+
+		for player in knows_about:
+			players_json[player.p_id] = player.as_JSON(attribute_filter=filters[player.p_id])
+
+
+		game_obj = json.loads(game_json)
+		game_obj['players'] = players_json
+		game_json = json.dumps(game_obj, sort_keys=True, indent=4)
 
 	def delete(self):
 		ww_redis_db.delete("g_list:"+self.g_id)
