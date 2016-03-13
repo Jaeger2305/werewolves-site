@@ -79,9 +79,13 @@ class User:
 		ww_redis_db.hset("player_list:"+self.p_id, "location", self.location)
 		ww_redis_db.hset("player_list:"+self.p_id, "g_history", ("|").join(self.g_history))
 
-	def as_JSON(self, user_json={}):
-		user_json['p_id'] = self.p_id
-		user_json['name'] = self.name
+	def as_JSON(self, user_json={}, attribute_filter=[]):
+		if 'p_id' in attribute_filter or not attribute_filter:
+			user_json['p_id'] = self.p_id
+
+		if 'name' in attribute_filter or not attribute_filter:
+			user_json['name'] = self.name
+
 		return json.dumps(user_json, default=lambda o: o.__dict__, sort_keys=True, indent=4)
 
 	# redundant
@@ -125,6 +129,7 @@ class Player(User):
 	# game specific class for interacting with the game class (join, interact with other players generally)
 
 	def __init__(self, p_id=None, session_key=None):
+		# overridable default attributes
 		self.character = "unassigned"
 		self.state = "alive"
 
@@ -133,8 +138,10 @@ class Player(User):
 		else:
 			super().__init__(p_id=p_id)
 
+		self.knows_about = {self.p_id:None}
+
 	def __del__(self):
-		self.save()
+		self.save()	# not guaranteed to be called!
 
 	def load(self, p_id):
 		redis_player = ww_redis_db.hgetall("player_list:"+str(p_id))
@@ -158,11 +165,61 @@ class Player(User):
 		if hasattr(self, 'g_id'):
 			ww_redis_db.hset("player_list:"+self.p_id, "g_id", self.g_id)
 
-	def as_JSON(self, player_json={}):
-		super().as_JSON(player_json)
-		player_json['character'] = self.character
-		player_json['state'] = self.state
+	def as_JSON(self, player_json={}, attribute_filter=[]):
+		super().as_JSON(player_json, attribute_filter)
+
+		if 'character' in attribute_filter or not attribute_filter:
+			player_json['character'] = self.character
+
+		if 'state' in attribute_filter or not attribute_filter:
+			player_json['state'] = self.state
+
 		return json.dumps(player_json, default=lambda o: o.__dict__, sort_keys=True, indent=4)
+
+	def gain_info(self, attribute_filter, p_id=None, player=None):
+		# error checking
+		if not p_id and not player:
+			raise ValueError("Either p_id or player needs to be supplied")
+
+		if not p_id and player and type(player) is not Player:
+			raise ValueError("supplied player argument must be a Player")
+
+		if not p_id and player:
+			p_id = player.p_id
+
+		# set knows about to empty list
+		if p_id not in self.knows_about:
+			if self.attribute_filter:
+				self.knows_about[p_id] = []
+
+		# attribute_filter with None allows everything to be broadcasted
+		if attribute_filter is None:
+			self.knows_about[p_id] = None
+		else:
+			for attribute in attribute_filter:
+				if attribute not in self.knows_about[p_id]:
+					self.knows_about[p_id].append(attribute)
+
+	def lose_info(self, attribute_filter, p_id=None, player=None):
+		# error checking
+		if not p_id and not player:
+			raise ValueError("Either p_id or player needs to be supplied")
+
+		if not p_id and player and type(player) is not Player:
+			raise ValueError("supplied player argument must be a Player")
+
+		if not p_id and player:
+			p_id = player.p_id
+
+		if p_id not in self.knows_about:
+			raise KeyError("No info held on this character anyway")
+
+		# populate list with all keys if knows about everything (filter on None)
+		if self.knows_about[p_id] is None:
+			self.knows_about[p_id] = Player(p_id).__dict__.keys()	# could cause bugs - set up another list to contain attributes that are broadcastable?
+
+		for attribute in attribute_filter:
+			self.knows_about[p_id].remove(attribute)
 
 	def leave_game(self, **kwargs):
 		result = {}
