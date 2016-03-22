@@ -5,6 +5,7 @@ import redis
 import uuid
 import json
 import weakref
+import inspect
 
 from importlib import import_module
 from django.conf import settings
@@ -28,8 +29,9 @@ class User:
 		self.session_key = ""
 		self.broadcastable = []
 
-		self.broadcastable.append("name", "location", "p_id")
+		self.broadcastable.extend(["name", "location", "p_id"])
 
+		# look for p_id in session
 		if session_key:
 			self.session = SessionStore(session_key=session_key)
 			self.session_key = session_key
@@ -37,6 +39,7 @@ class User:
 				p_id = self.session['p_id']
 
 		try:
+			# try loading from redis
 			self.p_id = p_id
 			self.load(p_id)
 		except Exception as error:
@@ -46,7 +49,7 @@ class User:
 			self.name = "Richard"
 			self.p_id = str(uuid.uuid4())
 			self.location = "outgame"
-			self.session = SessionStore()
+			self.session = SessionStore(self.session_key)
 			self.session_key = self.session.session_key
 
 			self.session['p_id'] = self.p_id
@@ -83,10 +86,10 @@ class User:
 		ww_redis_db.hset("player_list:"+self.p_id, "g_history", ("|").join(self.g_history))
 
 	def as_JSON(self, user_json={}, attribute_filter=[]):
-		if 'p_id' in attribute_filter or not attribute_filter:
+		if not attribute_filter or 'p_id' in attribute_filter:
 			user_json['p_id'] = self.p_id
 
-		if 'name' in attribute_filter or not attribute_filter:
+		if not attribute_filter or 'name' in attribute_filter:
 			user_json['name'] = self.name
 
 		return json.dumps(user_json, default=lambda o: o.__dict__, sort_keys=True, indent=4)
@@ -145,7 +148,7 @@ class Player(User):
 			super().__init__(p_id=p_id)
 
 		self.knows_about = {self.p_id:None}
-		self.broadcastable.append("character", "state")
+		self.broadcastable.extend(["character", "state"])
 
 	def __del__(self):
 		self.save()	# not guaranteed to be called!
@@ -175,28 +178,29 @@ class Player(User):
 	def as_JSON(self, player_json={}, attribute_filter=[]):
 		super().as_JSON(player_json, attribute_filter)
 
-		if 'character' in attribute_filter or not attribute_filter:
+		if not attribute_filter or 'character' in attribute_filter:
 			player_json['character'] = self.character
 
-		if 'state' in attribute_filter or not attribute_filter:
+		if not attribute_filter or 'state' in attribute_filter:
 			player_json['state'] = self.state
 
 		return json.dumps(player_json, default=lambda o: o.__dict__, sort_keys=True, indent=4)
 
-	def gain_info(self, attribute_filter, p_id=None, player=None):
+	# adds information on another player's attributes
+	def gain_info(self, attribute_filter, p_id=None, info_player=None):
 		# error checking
-		if not p_id and not player:
+		if not p_id and not info_player:
 			raise ValueError("Either p_id or player needs to be supplied")
 
-		if not p_id and player and type(player) is not Player:
+		if not p_id and info_player and inspect.isclass(info_player) and issubclass(info_player, Player):
 			raise ValueError("supplied player argument must be a Player")
 
-		if not p_id and player:
-			p_id = player.p_id
+		if not p_id and info_player:
+			p_id = info_player.p_id
 
 		# set knows about to empty list
 		if p_id not in self.knows_about:
-			if self.attribute_filter:
+			if attribute_filter:
 				self.knows_about[p_id] = []
 
 		# attribute_filter with None allows everything to be broadcasted
@@ -204,6 +208,8 @@ class Player(User):
 			self.knows_about[p_id] = None
 		else:
 			for attribute in attribute_filter:
+				if not self.knows_about[p_id]:
+					self.knows_about[p_id] = []
 				if attribute not in self.knows_about[p_id]:
 					self.knows_about[p_id].append(attribute)
 
@@ -227,6 +233,10 @@ class Player(User):
 
 		for attribute in attribute_filter:
 			self.knows_about[p_id].remove(attribute)
+
+	# hard sets the information a player knows
+	def set_info(self):
+		raise NotImplementedError
 
 	def leave_game(self, **kwargs):
 		result = {}
@@ -293,7 +303,7 @@ class Player(User):
 					g_id = str(g_key.decode("utf-8")).split(":")[1]
 					game = wwss.game.Game(g_id)
 					if len(game.players) < 10:
-						game.add_player(player=self)
+						game.add_player(joining_player=self)
 						
 						found_game = True
 						result['text'] = "found most space game"
@@ -304,7 +314,7 @@ class Player(User):
 			game = wwss.game.Game()
 			game.name = "mynewgame"
 			game.g_round = "1"
-			game.add_player(player=self)
+			game.add_player(joining_player=self)
 			
 
 			g_id = game.g_id
