@@ -158,46 +158,62 @@ class Game:
 
 		return True
 
-	def as_JSON(self):
+	def as_JSON(self, meta=True, players=False, cur_events=False, hist_events=False):
 		game_obj = {}
-		game_obj['g_id'] = self.g_id
-		game_obj['name'] = self.name
-		game_obj['g_round'] = self.g_round
 
-		players_json = {}
-		for player in self.players:
-			players_json[player.p_id] = player.as_JSON()
-
-		event_history_json = {}
-		for event in self.event_history:
-			event_history_json[event.e_id] = event.as_JSON()
-
-		event_queue_json = {}
-		for event in self.event_queue:
-			event_queue_json[event.e_id] = event.as_JSON()
-
-
-		game_obj['players'] = players_json
+		# default information
 		game_obj['state'] = self.state
-		game_obj['event_history'] = event_history_json
-		game_obj['event_queue'] = event_queue_json
+
+		if meta:
+			game_obj['g_id'] = self.g_id
+			game_obj['name'] = self.name
+			game_obj['g_round'] = self.g_round
+
+
+		# if asked for
+		if players:
+			players_json = {}
+			for player in self.players:
+				players_json[player.p_id] = player.as_JSON()
+
+			game_obj['players'] = players_json
+
+		if cur_events:
+			event_history_json = {}
+			for event in self.event_history:
+				event_history_json[event.e_id] = event.as_JSON()
+
+			game_obj['event_queue'] = event_queue_json
+
+		if hist_events:
+			event_queue_json = {}
+			for event in self.event_queue:
+				event_queue_json[event.e_id] = event.as_JSON()
+
+			game_obj['event_history'] = event_history_json
+
 
 		return json.dumps(game_obj, sort_keys=True, indent=4)
 
-	# filters the players out of the json array dependent on what they know
-	def filter_JSON(game_json, filters):
-		import ipdb;ipdb.set_trace()
+	# filters the players out of the json array dependent on a players knows_about dict
+	def filter_JSON(self, game_json, filters):
+		#import ipdb;ipdb.set_trace()
 		players_json = {}
 
 		knows_about = self.get_group(filters.keys())
 
 		for player in knows_about:
-			players_json[player.p_id] = player.as_JSON(attribute_filter=filters[player.p_id])
+			if player.p_id in filters:
+				players_json[player.p_id] = player.as_JSON(attribute_filter=filters[player.p_id])
+			else:
+				print("You were probably expecting a different p_id. Check the User() init function!")
 
 
 		game_obj = json.loads(game_json)
 		game_obj['players'] = players_json
 		game_json = json.dumps(game_obj, sort_keys=True, indent=4)
+
+		return game_json
 
 	def delete(self):
 		ww_redis_db.delete("g_list:"+self.g_id)
@@ -235,7 +251,7 @@ class Game:
 			# selecting based on uuid string
 			elif isinstance(selector, str):
 				if uuid.UUID(selector, version=4):
-					group_list = [player.p_id for player in group_list if player.p_id in self.get_player_ids]
+					group_list = [player for player in group_list if player.p_id in self.get_player_ids()]
 					print("found p_id in game, returning player object")
 
 		return group_list
@@ -368,13 +384,26 @@ class Game:
 
 		return winners
 
-	def add_player(self, p_id=None, player=None):
+	def add_player(self, p_id=None, joining_player=None):
 		if p_id:
-			player = user.Player(p_id)
-		if player not in self.players:
+			joining_player = user.Player(p_id)
+		if joining_player not in self.players:
 			# add a weakref to game
-			player.game_instance = self
-			self.players.append(player)
+			joining_player.game_instance = self	# this is rather hidden and unused. Delete?
+			self.players.append(joining_player)
+
+			import ipdb;ipdb.set_trace()
+			# share around the information
+			for ingame_player in self.players:
+				# give ingame player information about joining player
+				ingame_player.gain_info(['p_id', 'name'], info_player=joining_player)
+				print("given out the newly joined players p_id and name to all players currently in game")
+
+				# give joining player information about ingame_players
+				joining_player.gain_info(['p_id', 'name'], info_player=ingame_player)
+				print("given our joining player info on one of the ingame_players")
+
+
 
 
 		if len(self.players) >= self.options['max_players']:

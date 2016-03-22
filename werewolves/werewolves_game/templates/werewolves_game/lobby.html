@@ -57,6 +57,8 @@
 	<div class="button" id="broadcast_games">Broadcast games</div>
 	<div class="button" id="add_vote">add vote</div>
 	<div class="button" id="test_game">test game</div>
+	<div class="button" id="ask_update">ask_update</div>
+	<div class="button" id="gain_knowledge">gain_knowledge</div>
 </div>
 
 <div class="hidden">
@@ -105,7 +107,7 @@ swampdragon.onChannelMessage(function(channels, message){
 });
 
 swampdragon.ready(function(){
-	swampdragon.subscribe('lobby', 'default', {'session_key':$('#sessionID').html()}, null, null);
+	swampdragon.subscribe('lobby', 'default', {'session_key':session_key}, null, null);
 	console.log("subscribed");
 
 	swampdragon.callRouter('init', 'lobby', {'session_key':session_key}, function(context, data){
@@ -162,6 +164,18 @@ swampdragon.ready(function(){
 		parameters['player_count'] = player_count;
 		parameters['action'] = "test_game";
 		swampdragon.callRouter('developer', 'lobby', parameters, function(context, data){alert("done");});
+	});
+	$("#ask_update").on("click", function(){
+		var parameters = {};
+		parameters['session_key'] = session_key;
+		parameters['action'] = "ask_update";
+		swampdragon.callRouter('developer', 'lobby', parameters, function(context, data){console.log(data);});
+	});
+	$("#gain_knowledge").on("click", function(){
+		var parameters = {};
+		parameters['session_key'] = session_key;
+		parameters['action'] = "gain_knowledge";
+		swampdragon.callRouter('developer', 'lobby', parameters, function(context, data){console.log(data);});
 	});
 });
 

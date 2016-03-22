@@ -54,17 +54,29 @@ class LobbyRouter(BaseRouter):
     def init(self, **kwargs):
         if "session_key" in kwargs:
             initUser = User(session_key=str(kwargs['session_key']))     # this ensures the user's session is stored with the p_id in redis, allowing subsequent calls to redis to require only the p_id
+            self.send("initialised user into Redis")
         else:
             return self.send({"error":"no session key supplied"})
 
     def developer(self, **kwargs):
         if kwargs['action'] == "test_game":
             for x in range(1,int(kwargs['player_count'])):
-                player = Player(session_key=User().session_key)
+                player = Player(session_key=User(session_key=x).session_key)
                 player.find_game()
 
             myPlayer = Player(session_key=kwargs['session_key'])
             myPlayer.find_game()
+
+        elif kwargs['action'] == "ask_update":
+            import ipdb;ipdb.set_trace()
+            myPlayer = Player(session_key=kwargs['session_key'])
+            myGame = Game(session_key=kwargs['session_key'])
+
+            full_json = myGame.as_JSON()
+            filtered_json = myGame.filter_JSON(full_json, myPlayer.knows_about)
+
+            self.send(filtered_json)
+
 
     def session_handling(self, **kwargs):
         if 'action' not in kwargs:
