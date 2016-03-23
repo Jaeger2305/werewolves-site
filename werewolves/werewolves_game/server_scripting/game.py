@@ -385,6 +385,7 @@ class Game:
 		return winners
 
 	def add_player(self, p_id=None, joining_player=None):
+		import ipdb;ipdb.set_trace()
 		if p_id:
 			joining_player = user.Player(p_id)
 		if joining_player not in self.players:
@@ -392,19 +393,14 @@ class Game:
 			joining_player.game_instance = self	# this is rather hidden and unused. Delete?
 			self.players.append(joining_player)
 
-			import ipdb;ipdb.set_trace()
 			# share around the information
 			for ingame_player in self.players:
-				# give ingame player information about joining player
-				ingame_player.gain_info(['p_id', 'name'], info_player=joining_player)
-				print("given out the newly joined players p_id and name to all players currently in game")
+				if joining_player != ingame_player:
+					# give ingame player information about joining player
+					ingame_player.gain_info(['p_id', 'name'], info_player=joining_player)
 
-				# give joining player information about ingame_players
-				joining_player.gain_info(['p_id', 'name'], info_player=ingame_player)
-				print("given our joining player info on one of the ingame_players")
-
-
-
+					# give joining player information about ingame_players
+					joining_player.gain_info(['p_id', 'name'], info_player=ingame_player)
 
 		if len(self.players) >= self.options['max_players']:
 			print("Game full, starting now")
@@ -414,12 +410,17 @@ class Game:
 
 		self.save()
 
-	def remove_player(self, p_id=None, player=None):
+	def remove_player(self, p_id=None, leaving_player=None):
 		if p_id:
-			player = user.Player(p_id)
+			leaving_player = self.get_group([p_id])
 
-		while player in self.players:
-			self.players.remove(player)
+		for ingame_player in self.players:
+			if leaving_player != ingame_player:
+				leaving_player.lose_info(None, info_player=ingame_player, lose_all=True)
+				ingame_player.lose_info(None, info_player=leaving_player, lose_all=True)
+
+		while leaving_player in self.players:
+			self.players.remove(leaving_player)
 		
 		self.save()
 

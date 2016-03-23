@@ -6,6 +6,7 @@ import uuid
 import json
 import weakref
 import inspect
+import ast
 
 from importlib import import_module
 from django.conf import settings
@@ -153,14 +154,23 @@ class Player(User):
 	def __del__(self):
 		self.save()	# not guaranteed to be called!
 
+	def __eq__(self, other):
+		return self.p_id == other.p_id
+
 	def load(self, p_id):
 		redis_player = ww_redis_db.hgetall("player_list:"+str(p_id))
 		redis_player = {k.decode('utf8'): v.decode('utf8') for k, v in redis_player.items()}
 
+		# should always be true
 		if 'character' in redis_player:	# can be rewritten with all() keyword http://stackoverflow.com/questions/8041944/if-x-and-y-in-z
 			self.character = redis_player['character']
 		if 'state' in redis_player:
 			self.state = redis_player['state']
+		if 'knows_about' in redis_player:
+			redis_knows_about_dict = ast.literal_eval(redis_player['knows_about'])
+			self.knows_about = redis_knows_about_dict
+
+		# optional
 		if 'g_id' in redis_player:
 			self.g_id = redis_player['g_id']
 			print("game added as weak ref for Player")
@@ -172,6 +182,9 @@ class Player(User):
 		super().save()
 		ww_redis_db.hset("player_list:"+self.p_id, "state", self.state)
 		ww_redis_db.hset("player_list:"+self.p_id, "character", self.character)
+
+		ww_redis_db.hset("player_list:"+self.p_id, "knows_about", self.knows_about)
+
 		if hasattr(self, 'g_id'):
 			ww_redis_db.hset("player_list:"+self.p_id, "g_id", self.g_id)
 
@@ -192,7 +205,7 @@ class Player(User):
 		if not p_id and not info_player:
 			raise ValueError("Either p_id or player needs to be supplied")
 
-		if not p_id and info_player and inspect.isclass(info_player) and issubclass(info_player, Player):
+		if not p_id and info_player and not isinstance(info_player, Player):
 			raise ValueError("supplied player argument must be a Player")
 
 		if not p_id and info_player:
@@ -208,21 +221,22 @@ class Player(User):
 			self.knows_about[p_id] = None
 		else:
 			for attribute in attribute_filter:
-				if not self.knows_about[p_id]:
-					self.knows_about[p_id] = []
 				if attribute not in self.knows_about[p_id]:
 					self.knows_about[p_id].append(attribute)
 
-	def lose_info(self, attribute_filter, p_id=None, player=None):
+		self.save()
+
+	def lose_info(self, attribute_filter, p_id=None, info_player=None, lose_all=False):
 		# error checking
-		if not p_id and not player:
+		import ipdb;ipdb.set_trace()
+		if not p_id and not info_player:
 			raise ValueError("Either p_id or player needs to be supplied")
 
-		if not p_id and player and type(player) is not Player:
+		if not p_id and info_player and not isinstance(info_player, Player):
 			raise ValueError("supplied player argument must be a Player")
 
-		if not p_id and player:
-			p_id = player.p_id
+		if not p_id and info_player:
+			p_id = info_player.p_id
 
 		if p_id not in self.knows_about:
 			raise KeyError("No info held on this character anyway")
@@ -231,8 +245,21 @@ class Player(User):
 		if self.knows_about[p_id] is None:
 			self.knows_about[p_id] = Player(p_id).broadcastable
 
-		for attribute in attribute_filter:
-			self.knows_about[p_id].remove(attribute)
+		print("Player " + self.p_id+ " is losing " + p_id + "from knows_about dict. Before:\n")
+		print(self.knows_about.items())
+		
+		if lose_all:
+			print("losing all info!")
+			self.knows_about.pop(p_id)
+
+		else:
+			for attribute in attribute_filter:
+				self.knows_about[p_id].remove(attribute)
+
+		print("After:\n")
+		print(self.knows_about.items())
+
+		self.save()
 
 	# hard sets the information a player knows
 	def set_info(self):
@@ -252,7 +279,7 @@ class Player(User):
 			result['error'] = "Game not found"
 
 		if self in game.players:
-			game.remove_player(self.p_id)
+			game.remove_player(leaving_player=self)
 			
 			result['response'] = "Player removed from game"
 		else:
