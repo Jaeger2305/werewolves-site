@@ -68,7 +68,6 @@ class LobbyRouter(BaseRouter):
             myPlayer.find_game()
 
         elif kwargs['action'] == "ask_update":
-            import ipdb;ipdb.set_trace()
             myPlayer = Player(session_key=kwargs['session_key'])
             myGame = Game(session_key=kwargs['session_key'])
 
@@ -76,6 +75,35 @@ class LobbyRouter(BaseRouter):
             filtered_json = myGame.filter_JSON(full_json, myPlayer.knows_about)
 
             self.send(filtered_json)
+
+        elif kwargs['action'] == "gain_info":
+            if 'attribute_filter' in kwargs:
+                attribute_filter = kwargs['attribute_filter'].split(",")
+            else:
+                attribute_filter = ['state']
+
+            myGame = Game(session_key=kwargs['session_key'])
+            myPlayer = myGame.players[0]
+
+            print(myPlayer.knows_about)
+            myPlayer.gain_info(attribute_filter=attribute_filter, info_player=myGame.players[1])
+            print(myPlayer.knows_about)
+            self.send("added info on player: " + myGame.players[1].p_id + "\n for this player: "+myPlayer.p_id)
+
+        elif kwargs['action'] == "lose_info":
+            if 'attribute_filter' in kwargs:
+                attribute_filter = kwargs['attribute_filter'].split(",")
+            else:
+                attribute_filter = ['state']
+
+            myGame = Game(session_key=kwargs['session_key'])
+            myPlayer = myGame.players[0]
+
+            print(myPlayer.knows_about)
+            myPlayer.lose_info(attribute_filter=attribute_filter, info_player=myGame.players[1])
+            print(myPlayer.knows_about)
+
+            self.send("lost info on player: " + myGame.players[1].p_id + "\n for this player: "+myPlayer.p_id)
 
 
     def session_handling(self, **kwargs):

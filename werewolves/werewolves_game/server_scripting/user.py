@@ -7,6 +7,7 @@ import json
 import weakref
 import inspect
 import ast
+import warnings
 
 from importlib import import_module
 from django.conf import settings
@@ -59,6 +60,8 @@ class User:
 
 			self.save()
 
+		print("user initialised and saved: "+self.p_id)
+
 	def __eq__(self, other):
 		return self.p_id == other.p_id
 
@@ -82,7 +85,7 @@ class User:
 
 	def save(self):
 		ww_redis_db.hset("player_list:"+self.p_id, "session_key", self.session_key)
-		ww_redis_db.hset("player_list:"+self.p_id, "name", self.name)		# save player to redis DB (see redis_util for more info)
+		ww_redis_db.hset("player_list:"+self.p_id, "name", self.name)
 		ww_redis_db.hset("player_list:"+self.p_id, "location", self.location)
 		ww_redis_db.hset("player_list:"+self.p_id, "g_history", ("|").join(self.g_history))
 
@@ -139,6 +142,7 @@ class Player(User):
 		# overridable default attributes
 		self.character = "unassigned"
 		self.state = "alive"
+		self.knows_about = {}
 
 		if not p_id and not session_key:
 			raise ValueError("neither p_id or session_key supplied!")
@@ -148,8 +152,9 @@ class Player(User):
 		else:
 			super().__init__(p_id=p_id)
 
-		self.knows_about = {self.p_id:None}
+		self.knows_about[self.p_id] = None
 		self.broadcastable.extend(["character", "state"])
+		
 
 	def __del__(self):
 		self.save()	# not guaranteed to be called!
@@ -200,7 +205,7 @@ class Player(User):
 		return json.dumps(player_json, default=lambda o: o.__dict__, sort_keys=True, indent=4)
 
 	# adds information on another player's attributes
-	def gain_info(self, attribute_filter, p_id=None, info_player=None):
+	def gain_info(self, attribute_filter, p_id=None, info_player=None, gain_all=False):
 		# error checking
 		if not p_id and not info_player:
 			raise ValueError("Either p_id or player needs to be supplied")
@@ -217,18 +222,19 @@ class Player(User):
 				self.knows_about[p_id] = []
 
 		# attribute_filter with None allows everything to be broadcasted
-		if attribute_filter is None:
+		if gain_all or attribute_filter is None:
 			self.knows_about[p_id] = None
 		else:
 			for attribute in attribute_filter:
-				if attribute not in self.knows_about[p_id]:
+				if attribute not in self.broadcastable:
+					raise ValueError("Attribute '"+attribute+"' is not a broadcastable attribute.")
+				elif attribute not in self.knows_about[p_id]:
 					self.knows_about[p_id].append(attribute)
 
 		self.save()
 
 	def lose_info(self, attribute_filter, p_id=None, info_player=None, lose_all=False):
 		# error checking
-		import ipdb;ipdb.set_trace()
 		if not p_id and not info_player:
 			raise ValueError("Either p_id or player needs to be supplied")
 
@@ -239,7 +245,7 @@ class Player(User):
 			p_id = info_player.p_id
 
 		if p_id not in self.knows_about:
-			raise KeyError("No info held on this character anyway")
+			warnings.warn("No info held on this character anyway")
 
 		# populate list with all keys if knows about everything (filter on None)
 		if self.knows_about[p_id] is None:
@@ -254,7 +260,12 @@ class Player(User):
 
 		else:
 			for attribute in attribute_filter:
-				self.knows_about[p_id].remove(attribute)
+				if attribute not in self.broadcastable:
+					raise ValueError("Attribute '"+attribute+"' is not a broadcastable attribute.")
+				elif attribute in self.knows_about[p_id]:
+					self.knows_about[p_id].remove(attribute)
+				else:
+					print("attribute: "+attribute+" was not found in player: "+self.p_id+"'s knows_about")
 
 		print("After:\n")
 		print(self.knows_about.items())

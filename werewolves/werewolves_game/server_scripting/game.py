@@ -204,7 +204,7 @@ class Game:
 
 		for player in knows_about:
 			if player.p_id in filters:
-				players_json[player.p_id] = player.as_JSON(attribute_filter=filters[player.p_id])
+				players_json[player.p_id] = player.as_JSON(player_json={}, attribute_filter=filters[player.p_id])
 			else:
 				print("You were probably expecting a different p_id. Check the User() init function!")
 
@@ -385,7 +385,7 @@ class Game:
 		return winners
 
 	def add_player(self, p_id=None, joining_player=None):
-		import ipdb;ipdb.set_trace()
+		#import ipdb;ipdb.set_trace()
 		if p_id:
 			joining_player = user.Player(p_id)
 		if joining_player not in self.players:

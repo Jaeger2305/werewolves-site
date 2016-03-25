@@ -58,7 +58,8 @@
 	<div class="button" id="add_vote">add vote</div>
 	<div class="button" id="test_game">test game</div>
 	<div class="button" id="ask_update">ask_update</div>
-	<div class="button" id="gain_knowledge">gain_knowledge</div>
+	<div class="button" id="gain_info">gain_info</div>
+	<div class="button" id="lose_info">lose_info</div>
 </div>
 
 <div class="hidden">
@@ -171,10 +172,18 @@ swampdragon.ready(function(){
 		parameters['action'] = "ask_update";
 		swampdragon.callRouter('developer', 'lobby', parameters, function(context, data){console.log(data);});
 	});
-	$("#gain_knowledge").on("click", function(){
+	$("#gain_info").on("click", function(){
 		var parameters = {};
+		parameters['attribute_filter'] = prompt("enter comma separated attributes to gain info on player 2 in the session's game", "state");
 		parameters['session_key'] = session_key;
-		parameters['action'] = "gain_knowledge";
+		parameters['action'] = "gain_info";
+		swampdragon.callRouter('developer', 'lobby', parameters, function(context, data){console.log(data);});
+	});
+	$("#lose_info").on("click", function(){
+		var parameters = {};
+		parameters['attribute_filter'] = prompt("enter comma separated attributes to gain info on player 2 in the session's game", "state");
+		parameters['session_key'] = session_key;
+		parameters['action'] = "lose_info";
 		swampdragon.callRouter('developer', 'lobby', parameters, function(context, data){console.log(data);});
 	});
 });
