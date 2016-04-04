@@ -6,8 +6,10 @@ import uuid
 import json
 import weakref
 import inspect
-import ast
+import ast          # converts simple JSON string to python dict through ast.eval
 import warnings
+from pympler import muppy
+from pympler import summary
 
 from importlib import import_module
 from django.conf import settings
@@ -179,7 +181,7 @@ class Player(User):
         if 'g_id' in redis_player:
             self.g_id = redis_player['g_id']
             print("game added as weak ref for Player")
-            self.game = Game(g_id)
+            #self.game = Game(g_id)
 
         return super().load(p_id, redis_player)
 
@@ -278,6 +280,10 @@ class Player(User):
 
     def leave_game(self, **kwargs):
         result = {}
+
+        all_objects = muppy.get_objects()
+        sum1 = summary.summarize(all_objects)
+        summary.print_(sum1)
 
         if 'g_id' in kwargs:
             game = wwss.game.Game(kwargs['g_id'])

@@ -3,7 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
 VisualStudioVersion = 14.0.25123.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{888888A0-9F3D-457C-B088-3A5042F75D52}") = "werewolves", "..\werewolves.pyproj", "{96380E4D-3DC5-47C3-8C04-E22179F5E4D8}"
+Project("{888888A0-9F3D-457C-B088-3A5042F75D52}") = "werewolves scripting", "werewolves scripting.pyproj", "{96380E4D-3DC5-47C3-8C04-E22179F5E4D8}"
+EndProject
+Project("{888888A0-9F3D-457C-B088-3A5042F75D52}") = "werewolves server", "..\..\werewolves server.pyproj", "{B680FBFC-8A8F-478D-82F9-72AEA7D0AED5}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -13,6 +15,8 @@ Global
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{96380E4D-3DC5-47C3-8C04-E22179F5E4D8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{96380E4D-3DC5-47C3-8C04-E22179F5E4D8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B680FBFC-8A8F-478D-82F9-72AEA7D0AED5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B680FBFC-8A8F-478D-82F9-72AEA7D0AED5}.Release|Any CPU.ActiveCfg = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
