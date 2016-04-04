@@ -23,22 +23,30 @@ class EventFactory():
         if e_type == "night":
             return Event(   
                             g_id,
+                            [player.p_id for player in parent_game.get_group([wwss.characters.Werewolf, "alive"])],
+                            [player.p_id for player in parent_game.get_group([wwss.characters.Human, "alive"])],
                             cls.lookup_action(e_type), e_type
                         )
         if e_type == "day":
             return Event(
                             g_id,
+                            [player.p_id for player in parent_game.get_group([wwss.characters.Character, "alive"])],
+                            [player.p_id for player in parent_game.get_group([wwss.characters.Character, "alive"])],
                             cls.lookup_action(e_type), e_type
                         )
         if e_type == "dying":
             return Event(
                             g_id,
+                            [player.p_id for player in parent_game.get_group([wwss.characters.Witch, "alive"])],
+                            [player.p_id for player in parent_game.get_group(["dead", "last_event"])],
                             cls.lookup_action(e_type), e_type
                         )
         if e_type == "witch_save":
             raise NotImplementedError
             return Event(
                             g_id,
+                            [player.p_id for player in parent_game.get_group([wwss.characters.Human])],
+                            [player.p_id for player in parent_game.get_group([wwss.characters.Witch])],
                             cls.lookup_action(e_type),
                             e_type
                         )
@@ -46,6 +54,8 @@ class EventFactory():
             raise NotImplementedError
             return Event(
                             g_id,
+                            [player.p_id for player in parent_game.get_group([wwss.characters.Character])],
+                            [player.p_id for player in parent_game.get_group([wwss.characters.Witch])],
                             cls.lookup_action(e_type),
                             e_type
                         )
@@ -107,7 +117,9 @@ class Event():
         instigators = subjects = result_subjects = []
 
         if redis_event["instigators"]:
+            instigators     = redis_event["instigators"].split("|")
         if redis_event["subjects"]:
+            subjects        = redis_event["subjects"].split("|")
         if redis_event["result_subjects"]:
             result_subjects = redis_event["result_subjects"].split("|")
 
@@ -213,6 +225,7 @@ class Event():
         if self.result_subjects and (self.instigators or self.action_without_instigators):		# only add to history if there is an effect
             parent_game.event_history.append(self)
 
+        parent_game.remove_event(self)
         
         for p_id in self.result_subjects:	# new events queued will be in reverse order to the order they were added to subjects
             player = wwss.characters.CharacterFactory.create_character(character=None, p_id=p_id)
@@ -220,6 +233,7 @@ class Event():
             if result and isinstance(result, Event):
                 result = [result]
             if result and any(isinstance(e, Event) for e in result):
+                [parent_game.add_event(event, at_front=True) for event in result if isinstance(event, Event)]		# adds events with the same order they were returned
 
         if parent_game.get_winners():
             parent_game.change_state("game_finished")
