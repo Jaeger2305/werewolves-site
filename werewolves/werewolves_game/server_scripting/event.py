@@ -169,6 +169,7 @@ class Event():
     def start(self):
         print("subjects of the event"+str(self.subjects))
         print("instigators of the event:"+str(self.instigators))
+        #import ipdb;ipdb.set_trace()
         if not self.subjects or not self.instigators:
             self.finish_event()
             return
@@ -225,7 +226,7 @@ class Event():
         if self.result_subjects and (self.instigators or self.action_without_instigators):		# only add to history if there is an effect
             parent_game.event_history.append(self)
 
-        parent_game.remove_event(self)
+        parent_game.archive_event(self)
         
         for p_id in self.result_subjects:	# new events queued will be in reverse order to the order they were added to subjects
             player = wwss.characters.CharacterFactory.create_character(character=None, p_id=p_id)

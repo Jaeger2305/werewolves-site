@@ -281,10 +281,6 @@ class Player(User):
     def leave_game(self, **kwargs):
         result = {}
 
-        all_objects = muppy.get_objects()
-        sum1 = summary.summarize(all_objects)
-        summary.print_(sum1)
-
         if 'g_id' in kwargs:
             game = wwss.game.Game(kwargs['g_id'])
         elif 'g_id' in self.session:
@@ -308,6 +304,9 @@ class Player(User):
             self.session.save()
 
         result['g_id'] = game.g_id
+
+        game.save()
+        self.save()
 
         return result
 
@@ -369,11 +368,11 @@ class Player(User):
 
         self.session['g_id'] = g_id
         self.session['location'] = "ingame"
-        self.session.save()
 
         result['g_id'] = self.session['g_id']
         result['p_id'] = self.session['p_id']
 
-        #import ipdb;ipdb.set_trace()
+        self.session.save()
+        self.save()
 
         return result

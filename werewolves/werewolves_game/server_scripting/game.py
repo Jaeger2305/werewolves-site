@@ -36,6 +36,7 @@ class GamePool:
     pass
 
 class Game:
+    # redundant? Or could be complementary to just instantiating from redis
     @classmethod
     def check_exists(cls, g_id):
         # check GamePool Singleton to see if this game already exists, otherwise recycle an object if pool is full, or create new
@@ -47,9 +48,10 @@ class Game:
                             'mystic': False,
                             'witch': False	}
         
-        self.players = []	# list of Players
-        self.event_queue = []	# events waiting to happen. Triggered based on Game.state
-        self.event_history = []	# past events
+        self.state = ""             # used to track the current operation or state of the game
+        self.players = []	        # list of Players
+        self.event_queue = []	    # events waiting to happen. Triggered based on Game.state
+        self.event_history = []	    # past events
 
         if g_id is None and session_key is not None:
             session_data = SessionStore(session_key=session_key)
@@ -66,8 +68,10 @@ class Game:
             self.name = name
             self.state = "matchmaking"	# default. Currently unused
 
-        self.saved = False		# enables chain editing
+        self.saved = False		    # enables chain editing
         self.iol = IOLoop.current()	# main tornado loop uses for callbacks
+
+        print("I just init'd game: " + self.g_id)
 
     def __del__(self):
         if not self.is_saved():
@@ -115,6 +119,9 @@ class Game:
         publish_data("game:"+self.g_id, data_dict)
 
         self.saved = True
+        
+        print("I saved loaded game: " + self.g_id)
+
 
     def load(self, g_id):
         if g_id is None:
@@ -361,8 +368,8 @@ class Game:
             else:
                 e_type = "day"
 
-            newEvent = event.EventFactory.create_event(e_type, self.g_id, parent_game=self)
-            self.add_event(newEvent)
+            new_event = event.EventFactory.create_event(e_type, self.g_id, parent_game=self)
+            self.add_event(new_event)
 
             self.change_state("new_event")
         
@@ -374,17 +381,17 @@ class Game:
 
         self.iol.call_later(10, self.check_event_queue)					# permits constant callback. BUG: never cleaned up as I'm not saving the handler to remove from iol.
 
-    def add_event(self, newEvent, at_front=False):
+    def add_event(self, new_event, at_front=False):
         if at_front:
-            self.event_queue.insert(0, newEvent)
+            self.event_queue.insert(0, new_event)
         else:
-            self.event_queue.append(newEvent)
+            self.event_queue.append(new_event)
         
         self.save()
 
-    def remove_event(self, oldEvent):
-        self.event_queue.remove(oldEvent)
-        self.event_history.append(oldEvent)
+    def archive_event(self, old_Event):
+        self.event_queue.remove(old_Event)
+        self.event_history.append(old_Event)
         self.save()
 
     def get_winners(self):
@@ -403,9 +410,8 @@ class Game:
         if p_id:
             joining_player = user.Player(p_id)
         if joining_player not in self.players:
-            # add a weakref to game
-            joining_player.game_instance = self	# this is rather hidden and unused. Delete?
             self.players.append(joining_player)
+            self.save() # all changes to the game must be immediately saved! otherwise due to call stacks, this would overwrite the new changes. I can help ease this problem by passing by reference in particular circumstances.
 
             # share around the information
             for ingame_player in self.players:
@@ -419,8 +425,8 @@ class Game:
         if len(self.players) >= self.options['max_players']:
             print("Game full, starting now")
             self.change_state("ready")
-            self.start_game()
-            #self.iol.call_later(3, self.change_state, "ready")
+            print("starting game in 3 secs")
+            self.iol.call_later(3, self.start_game)     # for production/give a delay
 
         self.save()
 

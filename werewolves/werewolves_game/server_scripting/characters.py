@@ -14,7 +14,7 @@ class CharacterFactory:
         # account for error here?
 
         if character == "unassigned":
-            warnings.warn("Character created with no role. Should not be initialised until player.character has been assigned via game.assign_roles(). Could lead to undefined behaviour if used ingame.")
+            warnings.warn("Character created with no role. Could lead to undefined behaviour if player: "+kwargs['p_id']+" was expected to be a character. You have likely instantiated a game that hasn't begun yet.")
             return Character(**kwargs)
         if character == "werewolf":
             return Werewolf(**kwargs)
@@ -38,7 +38,7 @@ class Character(Player):
     def attacked_by_werewolves(self):
         self.state = "dead"
         # returning an even here doesn't work yet. self.game isn't referenced properly
-        return event.EventFactory.create_event("dying", self.game)
+        return event.EventFactory.create_event("dying", self.g_id)
 
     def lynched(self):
         self.state = "dead"
