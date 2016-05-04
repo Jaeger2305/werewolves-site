@@ -59,6 +59,9 @@
     <Compile Include="werewolves_game\models.py" />
     <Compile Include="werewolves_game\routers.py" />
     <Compile Include="werewolves_game\serializers.py" />
+    <Compile Include="werewolves_game\server_scripting\callback_handling.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="werewolves_game\server_scripting\characters.py" />
     <Compile Include="werewolves_game\server_scripting\db_mod.py" />
     <Compile Include="werewolves_game\server_scripting\event.py" />

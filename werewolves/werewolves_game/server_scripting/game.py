@@ -11,6 +11,7 @@
         Meta information (score, friends)
 '''
 import warnings
+import traceback
 import redis
 import uuid
 import json
@@ -73,12 +74,6 @@ class Game:
 
         print("I just init'd game: " + self.g_id)
 
-    def __del__(self):
-        if not self.is_saved():
-            self.save()
-        self.characters = {}
-        self.players = []
-
     def __eq__(self, other):
         return self.g_id == other.g_id
 
@@ -89,25 +84,16 @@ class Game:
         
         players_string = cur_events_string = old_events_string = ""
         if self.players:
-            players_string = "|".join(self.get_player_ids())
+            players_string = "|".join(self.players)
         ww_redis_db.hset("g_list:"+self.g_id, "players", players_string)
         
         if self.event_queue:
-            cur_events_string = "|".join([event.e_id for event in self.event_queue])
+            cur_events_string = "|".join(self.event_queue)
         ww_redis_db.hset("g_list:"+self.g_id, "event_queue", cur_events_string)
         
         if self.event_history:
-            old_events_string = "|".join([event.e_id for event in self.event_history])
+            old_events_string = "|".join(self.event_history)
         ww_redis_db.hset("g_list:"+self.g_id, "event_history", old_events_string)
-
-        for event in self.event_queue:
-            event.save()
-
-        for event in self.event_history:
-            event.save()
-
-        for player in self.players:
-            player.save()
 
         games_dict = {}
         data_dict = {}
@@ -121,7 +107,6 @@ class Game:
         self.saved = True
         
         print("I saved loaded game: " + self.g_id)
-
 
     def load(self, g_id):
         if g_id is None:
@@ -143,9 +128,8 @@ class Game:
         if redis_game['players']:
             player_ids = redis_game['players'].split('|')
             for p_id in player_ids:
-                if p_id not in self.get_player_ids():
-                    player = user.Player(p_id)
-                    self.players.append(CharacterFactory.create_character(player.character, p_id=player.p_id))
+                if p_id not in self.players:
+                    self.players.append(p_id)
         else:
             self.players = []
 
@@ -153,13 +137,13 @@ class Game:
             event_ids = redis_game['event_history'].split("|")
             for e_id in event_ids:
                 if e_id not in [event.e_id for event in self.event_history]:
-                    self.event_history.append(event.Event.load(self.g_id, e_id))
+                    self.event_history.append(e_id) # should this use self.archive_event()?
 
         if redis_game['event_queue']:
             event_ids = redis_game['event_queue'].split("|")
             for e_id in event_ids:
-                if e_id not in [event.e_id for event in self.event_queue]:
-                    self.add_event(event.Event.load(self.g_id, e_id))
+                if e_id not in self.event_queue:
+                    self.add_event(e_id)
 
         self.state = redis_game['state']
 
@@ -180,22 +164,22 @@ class Game:
         # if asked for
         if players:
             players_json = {}
-            for player in self.players:
+            for player in self.get_players():
                 players_json[player.p_id] = player.as_JSON()
 
             game_obj['players'] = players_json
 
         if cur_events:
-            event_history_json = {}
-            for event in self.event_history:
-                event_history_json[event.e_id] = event.as_JSON()
+            event_queue_json = {}
+            for event in self.get_event_queue():
+                event_queue_json[event.e_id] = event.as_JSON()
 
             game_obj['event_queue'] = event_queue_json
 
         if hist_events:
-            event_queue_json = {}
-            for event in self.event_queue:
-                event_queue_json[event.e_id] = event.as_JSON()
+            event_history_json = {}
+            for event in self.get_event_history():
+                event_history_json[event.e_id] = event.as_JSON()
 
             game_obj['event_history'] = event_history_json
 
@@ -204,7 +188,6 @@ class Game:
 
     # filters the players out of the json array dependent on a players knows_about dict
     def filter_JSON(self, game_json, filters):
-        #import ipdb;ipdb.set_trace()
         players_json = {}
 
         knows_about = self.get_group(filters.keys())
@@ -233,14 +216,34 @@ class Game:
             return False
 
     def get_players(self):
-        return self.players
+        players = []
+        for p_id in self.players:
+            players.append(CharacterFactory.create_character(character=None, p_id=p_id))
+
+        return players
+
+    def get_event_queue(self):
+        events = []
+        for e_id in self.event_queue:
+            events.append(event.Event.load(self.g_id, e_id))
+
+        return events
+
+    def get_event_history(self):
+        event_history = []
+        for e_id in self.event_history:
+            event_history.append(event.Event.load(self.g_id, e_id))
+
+        return event_history
 
     def get_player_ids(self):
-        return [player.p_id for player in self.players]
+        warnings.warn("redundant function called")
+        print(traceback.format_exc)
+        return self.players
 
     def get_group(self, selectors):
-        # loop through self.players and remove those that don't fit the group as an array
-        group_list = self.players
+        # loop through Player objects and remove those that don't fit the group as an array
+        group_list = self.get_players()
 
         for selector in selectors:
             # selecting based on player.state
@@ -265,6 +268,9 @@ class Game:
 
     def assign_roles(self):
         shuffle(self.players)
+
+        temp_characters = []
+
         werewolves_count = ceil(0.3*self.options['max_players'])
 
         if self.options['witch']:
@@ -273,18 +279,16 @@ class Game:
             witch_count = 0
 
         for x in range(werewolves_count):
-            self.players[x].character = "werewolf"
+            temp_characters.append(CharacterFactory.create_character("werewolf", p_id=self.players[x]))
 
         for x in range(werewolves_count, werewolves_count+witch_count):
-            self.players[x].character = "witch"
+            temp_characters.append(CharacterFactory.create_character("witch", p_id=self.players[x]))
 
         for x in range(werewolves_count+witch_count, len(self.players)):
-            self.players[x].character = "human"
+            temp_characters.append(CharacterFactory.create_character("human", p_id=self.players[x]))
 
-        for i, player in enumerate(self.players):
-            self.players[i] = CharacterFactory.create_character(player.character, p_id=player.p_id)
-            self.players[i].game = self	# raises errors if actions done on characters not through the game
-            self.players[i].save()
+        for player in temp_characters:
+            player.save()
             print(player.character)
 
     def start_game(self):
@@ -296,9 +300,9 @@ class Game:
         
         self.g_round += 1
 
-        newEvent = event.EventFactory.create_event("night", self.g_id, self)
+        new_event = event.EventFactory.create_event("night", self.g_id, self)
 
-        self.add_event(newEvent)	# should always be event_queue[0] if from scratch (problems if loaded from redis?)
+        self.add_event(new_event.e_id)
 
         self.check_event_queue()
 
@@ -309,6 +313,8 @@ class Game:
     # needs to be complemented by a filter function
     def change_state(self, state):
         self.state = state
+        self.save()
+
         data_dict = {}
 
         if state == "lobby":
@@ -321,13 +327,14 @@ class Game:
             print("waiting for event")
 
         if state == "new_event":
-            print("new event starting: " + self.event_queue[0].e_type)
-            data_dict["event"] = self.event_queue[0].e_type
+            new_event = self.get_event_queue()[0]
+            print("new event starting: " + new_event.e_type)
+            data_dict["event"] = new_event.e_type
 
         if state == "voting":
             print("Waiting 10s to collect votes")
 
-            cur_event = self.event_queue[0]
+            cur_event = self.get_event_queue()[0]
 
             data_dict["subjects"] = []
             for player in self.get_group(cur_event.subjects):
@@ -350,9 +357,6 @@ class Game:
 
             print("-------"+winners.upper()+"-------")
 
-
-        self.save()
-
     def check_event_queue(self):
         if self.state == "game_finished":
             self.end_game()												# tidy up
@@ -369,13 +373,14 @@ class Game:
                 e_type = "day"
 
             new_event = event.EventFactory.create_event(e_type, self.g_id, parent_game=self)
-            self.add_event(new_event)
+            self.add_event(new_event.e_id)
 
             self.change_state("new_event")
         
         if self.state == "new_event" or self.state == "waiting":				# work through queue
             print("event in the queue, we've been waiting to start")
-            self.event_queue[0].start()
+            next_event = event.Event.load(self.g_id, self.event_queue[0])
+            next_event.start()
         else:
             print("event in progress, resetting callback but nothing changed")
 
@@ -389,9 +394,12 @@ class Game:
         
         self.save()
 
-    def archive_event(self, old_Event):
-        self.event_queue.remove(old_Event)
-        self.event_history.append(old_Event)
+    def archive_event(self, old_event_id):
+        if old_event_id in self.event_queue:
+            self.event_queue.remove(old_event_id)
+        else:
+            warnings.warn("Tried to archive an event that wasn't found in the queue: " + old_event_id)
+        self.event_history.append(old_event_id)
         self.save()
 
     def get_winners(self):
@@ -405,16 +413,19 @@ class Game:
 
         return winners
 
-    def add_player(self, p_id=None, joining_player=None):
-        #import ipdb;ipdb.set_trace()
-        if p_id:
-            joining_player = user.Player(p_id)
-        if joining_player not in self.players:
-            self.players.append(joining_player)
+    def add_player(self, joining_p_id=None, joining_player=None):
+        if joining_p_id:
+            joining_player = user.Player(p_id=joining_p_id)
+        elif joining_player:
+            joining_p_id = joining_player.p_id
+        else:
+            raise ValueError
+        if joining_p_id not in self.players:
+            self.players.append(joining_p_id)
             self.save() # all changes to the game must be immediately saved! otherwise due to call stacks, this would overwrite the new changes. I can help ease this problem by passing by reference in particular circumstances.
 
-            # share around the information
-            for ingame_player in self.players:
+            # share around generic information
+            for ingame_player in self.get_players():
                 if joining_player != ingame_player:
                     # give ingame player information about joining player
                     ingame_player.gain_info(['p_id', 'name'], info_player=joining_player)
@@ -430,17 +441,25 @@ class Game:
 
         self.save()
 
-    def remove_player(self, p_id=None, leaving_player=None):
-        if p_id:
-            leaving_player = self.get_group([p_id])
+    def remove_player(self, leaving_p_id=None, leaving_player=None):
+        if leaving_p_id:
+            leaving_player = self.get_group([leaving_p_id])
+        else:
+            leaving_p_id = leaving_player.p_id
+            leaving_player = self.get_group([leaving_p_id])
 
-        for ingame_player in self.players:
+        if not leaving_player:
+            warnings.warn("Leaving player not found in game: "+leaving_p_id)
+            traceback.print_exc()
+            return
+
+        for ingame_player in self.get_players():
             if leaving_player != ingame_player:
                 leaving_player.lose_info(None, info_player=ingame_player, lose_all=True)
                 ingame_player.lose_info(None, info_player=leaving_player, lose_all=True)
 
-        while leaving_player in self.players:
-            self.players.remove(leaving_player)
+        while leaving_p_id in self.players:
+            self.players.remove(leaving_p_id)
         
         self.save()
 

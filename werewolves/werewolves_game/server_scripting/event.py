@@ -6,9 +6,11 @@ from collections import Counter
 from random import shuffle
 
 from swampdragon.pubsub_providers.data_publisher import publish_data
+from tornado.ioloop import IOLoop
 
 import werewolves_game.server_scripting as wwss
 from werewolves_game.server_scripting.redis_util import *
+from werewolves_game.server_scripting.callback_handling import callback_handler
 
 # global callback handling/cancelling singleton
 # class callback_handling:
@@ -61,8 +63,8 @@ class EventFactory():
                         )
 
     @classmethod
-    def event_from_redis(cls, g_id, instigators, subjects, e_type, result_subjects, votes, e_id):
-        return Event(g_id, instigators, subjects, cls.lookup_action(e_type), e_type, result_subjects, e_id)
+    def event_from_redis(cls, g_id, instigators, subjects, e_type, result_subjects, votes, e_id, voting_callback_reference=None):
+        return Event(g_id, instigators, subjects, cls.lookup_action(e_type), e_type, result_subjects, votes, e_id, voting_callback_reference)
 
     @classmethod
     def lookup_action(cls, e_type):
@@ -77,15 +79,15 @@ class EventFactory():
 # Handles broadcasting and vote hosting of the event
 # for selective info, use the Game class to filter
 class Event():
-    def __init__(self, g_id, instigators, subjects, action, e_type, result_subjects=[], votes=[], e_id=None):
+    def __init__(self, g_id, instigators, subjects, action, e_type, result_subjects=[], votes=[], e_id=None, voting_callback_reference=None):
         self.subjects                   = subjects			# list of those the events affects
         self.instigators                = instigators		# list of those starting the event
         self.action                     = action			# function that will implement the effect
         self.g_id                       = g_id
         self.e_type                     = e_type
         self.result_subjects            = result_subjects
-        self.votes                      = []
-        self.callback_handler           = []
+        self.votes                      = votes
+        self.voting_callback_reference  = voting_callback_reference
         self.action_without_instigators = False
 
         if not e_id:		# not from redis
@@ -93,10 +95,8 @@ class Event():
             self.result_subjects    = []	# forces to list, otherwise it's kept as null
 
         self.e_id =  e_id
-        return
-
-    def __del__(self):
         self.save()
+        return
 
     def __eq__(self, other):
         return self.e_id == other.e_id
@@ -109,12 +109,18 @@ class Event():
         ww_redis_db.hset("event:"+self.e_id, "result_subjects", "|".join(self.result_subjects))
         ww_redis_db.hset("event:"+self.e_id, "votes", "|".join(self.votes))
 
-    @classmethod
-    def load(cls, g_id, e_id):
+        ww_redis_db.hset("event:"+self.e_id, "voting_callback_reference", self.voting_callback_reference)
+
+    @staticmethod
+    def load(g_id, e_id):
         redis_event = ww_redis_db.hgetall("event:"+e_id)
         redis_event = {k.decode('utf8'): v.decode('utf8') for k, v in redis_event.items()}
 
-        instigators = subjects = result_subjects = []
+        instigators = subjects = result_subjects = votes = []
+        voting_callback_reference = None
+
+        if not redis_event:
+            raise ValueError("couldn't load event from redis with e_id: " + e_id)
 
         if redis_event["instigators"]:
             instigators     = redis_event["instigators"].split("|")
@@ -131,9 +137,13 @@ class Event():
         #instigators = [self.game.get_group(p_id)[0] for p_id in instigators]
         #subjects = [self.game.get_group(p_id)[0] for p_id in subjects]
         #result_subjects = [self.game.get_group(p_id)[0] for p_id in result_subjects]
-        votes = redis_event["votes"]
+        if redis_event["votes"]:        
+            votes = redis_event["votes"].split("|")
 
-        return EventFactory.event_from_redis(g_id, instigators, subjects, redis_event["e_type"], result_subjects, votes, e_id)
+        if redis_event["voting_callback_reference"]:
+            voting_callback_reference = redis_event["voting_callback_reference"]
+
+        return EventFactory.event_from_redis(g_id, instigators, subjects, redis_event["e_type"], result_subjects, votes, e_id, voting_callback_reference=voting_callback_reference)
 
     def as_JSON(self):
         event_json = {}
@@ -169,7 +179,7 @@ class Event():
     def start(self):
         print("subjects of the event"+str(self.subjects))
         print("instigators of the event:"+str(self.instigators))
-        #import ipdb;ipdb.set_trace()
+
         if not self.subjects or not self.instigators:
             self.finish_event()
             return
@@ -191,50 +201,57 @@ class Event():
         parent_game = wwss.game.Game(self.g_id)
         parent_game.change_state("voting")
 
-        self.callback_handler = parent_game.iol.call_later(5, self.vote_result)
+        callback_handle = IOLoop.current().call_later(8, Event.vote_result, parent_game.g_id, self.e_id)
+        self.voting_callback_reference = callback_handler.add_callback(self.e_id, callback_handle)
+        self.save()
 
-    def add_vote(self, p_id):
-        parent_game = wwss.game.Game(self.g_id)
-        # callrouter might be better doing this
-        print("Player just voted for: "+p_id)
-        self.votes.append(p_id)
+    @staticmethod
+    def add_vote(g_id, e_id, p_id_vote, voting_by_p_id=None):
+        voting_event = Event.load(g_id, e_id)
+        parent_game = wwss.game.Game(g_id)
+        
+        print("Player just voted for: " + p_id_vote)
+        voting_event.votes.append(p_id_vote)
 
-        if len(self.votes) == len(self.voters):
+        if len(voting_event.votes) == len(voting_event.voters):
             parent_game.change_state("finished_voting")
-            parent_game.iol.remove_timeout(self.callback_handler)
+            voting_event.vote_result()
 
-    def vote_result(self):
-        parent_game = wwss.game.Game(self.g_id)
-        if self.votes:
-            p_id_most_common = Counter(self.votes).most_common(1)
-            print("most common vote was:") 
-            print(p_id_most_common)
-            self.result_subjects = [p_id_most_common]
+    # perhaps unnecessary to split out from finish_event, but might be useful in the future to publish some unrelated data here
+    @staticmethod
+    def vote_result(g_id, e_id):
+        parent_game = wwss.game.Game(g_id)
+        voting_event = Event.load(g_id, e_id)
+        callback_handler.remove_callback(voting_event.e_id, voting_event.voting_callback_reference)
+
+        if voting_event.votes:
+            p_id_most_common = Counter(voting_event.votes).most_common(1)
+            print("most common vote was: "+p_id_most_common)
+            voting_event.result_subjects = [p_id_most_common]
         else:
-            shuffle(self.subjects)
+            shuffle(voting_event.subjects)
             print("No votes given, picking random:")
-            print(self.subjects[0])
-            self.result_subjects = [self.subjects[0]]
+            print(voting_event.subjects[0])
+            voting_event.result_subjects = [voting_event.subjects[0]]
 
         parent_game.change_state("finished_voting")
-        self.finish_event()
+        voting_event.finish_event()
         return
 
     def finish_event(self):
         parent_game = wwss.game.Game(self.g_id)
         print("result subjects of the event:"+str(self.result_subjects))
         if self.result_subjects and (self.instigators or self.action_without_instigators):		# only add to history if there is an effect
-            parent_game.event_history.append(self)
-
-        parent_game.archive_event(self)
+            parent_game.archive_event(self.e_id)
         
         for p_id in self.result_subjects:	# new events queued will be in reverse order to the order they were added to subjects
             player = wwss.characters.CharacterFactory.create_character(character=None, p_id=p_id)
             result = self.action(player)
             if result and isinstance(result, Event):
-                result = [result]
-            if result and any(isinstance(e, Event) for e in result):
-                [parent_game.add_event(event, at_front=True) for event in result if isinstance(event, Event)]		# adds events with the same order they were returned
+                result = [result]   # forces into array to allow multiple events by default
+            if result and any(isinstance(e, Event) for e in result):    # if result contains any events
+                for event in result:
+                    [parent_game.add_event(event.e_id, at_front=True) for event in result if isinstance(event, Event)]		# adds events with the same order they were returned
 
         if parent_game.get_winners():
             parent_game.change_state("game_finished")

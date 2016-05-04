@@ -156,10 +156,6 @@ class Player(User):
 
         self.knows_about[self.p_id] = None
         self.broadcastable.extend(["character", "state"])
-        
-
-    def __del__(self):
-        self.save()	# not guaranteed to be called!
 
     def __eq__(self, other):
         return self.p_id == other.p_id
@@ -180,8 +176,6 @@ class Player(User):
         # optional
         if 'g_id' in redis_player:
             self.g_id = redis_player['g_id']
-            print("game added as weak ref for Player")
-            #self.game = Game(g_id)
 
         return super().load(p_id, redis_player)
 
@@ -274,6 +268,10 @@ class Player(User):
 
         self.save()
 
+    # moves information so it's not part of the core game information
+    def archive_info(self):
+        raise NotImplementedError
+
     # hard sets the information a player knows
     def set_info(self):
         raise NotImplementedError
@@ -282,37 +280,42 @@ class Player(User):
         result = {}
 
         if 'g_id' in kwargs:
-            game = wwss.game.Game(kwargs['g_id'])
+            player_game = wwss.game.Game(kwargs['g_id'])
         elif 'g_id' in self.session:
-            game = wwss.game.Game(self.session['g_id'])
+            player_game = wwss.game.Game(self.session['g_id'])
+            print("g_id wasn't passed into leave game via kwargs? :S")
         elif self.session.has_key("location") and self.session['location'] == "outgame":
             result['error'] = "Player not currently in a game."
             return result
         else:
             result['error'] = "Game not found"
+            return result
 
-        if self in game.players:
-            game.remove_player(leaving_player=self)
+        if self.p_id in player_game.players:
+            player_game.remove_player(leaving_player=self)
             
             result['response'] = "Player removed from game"
         else:
-            result['error'] = "Player not found in game: "+game.g_id
+            result['error'] = "Player not found in game: "+player_game.g_id
         
         if 'g_id' in self.session:
             self.session['location'] = "outgame"
             #self.session.pop('g_id', None)
             self.session.save()
 
-        result['g_id'] = game.g_id
+        result['g_id'] = player_game.g_id
 
-        game.save()
         self.save()
 
         return result
 
     def find_game(self, **kwargs):
         found_game = False
-        if 'g_id' in self.session and 'location' in self.session and self.session['location'] == 'ingame':
+        if (
+            'g_id' in self.session
+        and 'location' in self.session
+        and self.session['location'] == 'ingame'
+        ):
             return {'text':"already ingame",
                     'g_id':self.session['g_id']}
 
@@ -343,9 +346,9 @@ class Player(User):
                 # find game with least spaces
                 for g_key in g_list:
                     g_id = str(g_key.decode("utf-8")).split(":")[1]
-                    game = wwss.game.Game(g_id)
-                    if len(game.players) < 10:
-                        game.add_player(joining_player=self)
+                    joining_game = wwss.game.Game(g_id)
+                    if len(joining_game.players) < 10:
+                        joining_game.add_player(joining_player=self)
                         
                         found_game = True
                         result['text'] = "found most space game"
@@ -353,26 +356,28 @@ class Player(User):
 
         if not found_game:
             # start new game
-            game = wwss.game.Game()
-            game.name = "mynewgame"
-            game.g_round = "1"
-            game.add_player(joining_player=self)
+            joining_game = wwss.game.Game()
+            joining_game.name = "mynewgame"
+            joining_game.g_round = "1"
+            joining_game.add_player(joining_player=self)
             
 
-            g_id = game.g_id
+            self.g_id = joining_game.g_id
             result['text'] = "new game started"
 
         if 'computers' in kwargs:
             # populate with members
             result['text'] += ". Populated with AI."
 
-        self.session['g_id'] = g_id
+        self.g_id = joining_game.g_id
+        self.location = "ingame"
+        self.session['g_id'] = self.g_id
         self.session['location'] = "ingame"
 
         result['g_id'] = self.session['g_id']
         result['p_id'] = self.session['p_id']
 
         self.session.save()
-        self.save()
+        self.save() # redundant? saves when joining the game
 
         return result

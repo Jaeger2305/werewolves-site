@@ -8,7 +8,7 @@ import werewolves_game.server_scripting.event as event
 class CharacterFactory:
     @classmethod
     def create_character(cls, character, **kwargs):
-        if character is None and p_id in kwargs:
+        if character is None and 'p_id' in kwargs:
             myPlayer = Player(kwargs['p_id'])
             character = myPlayer.character
         # account for error here?
