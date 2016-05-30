@@ -37,7 +37,7 @@ class Character(Player):
 
     def attacked_by_werewolves(self):
         self.state = "dead"
-        # returning an even here doesn't work yet. self.game isn't referenced properly
+        self.save()
         return event.EventFactory.create_event("dying", self.g_id)
 
     def lynched(self):

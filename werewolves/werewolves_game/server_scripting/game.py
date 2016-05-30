@@ -133,12 +133,14 @@ class Game:
         else:
             self.players = []
 
+        self.event_history = []
         if redis_game['event_history']:
             event_ids = redis_game['event_history'].split("|")
             for e_id in event_ids:
-                if e_id not in [event.e_id for event in self.event_history]:
+                if e_id not in self.event_history:
                     self.event_history.append(e_id) # should this use self.archive_event()?
 
+        self.event_queue = []
         if redis_game['event_queue']:
             event_ids = redis_game['event_queue'].split("|")
             for e_id in event_ids:
@@ -238,7 +240,6 @@ class Game:
 
     def get_player_ids(self):
         warnings.warn("redundant function called")
-        print(traceback.format_exc)
         return self.players
 
     def get_group(self, selectors):
@@ -246,13 +247,17 @@ class Game:
         group_list = self.get_players()
 
         for selector in selectors:
+            if not group_list:
+                return group_list
+
             # selecting based on player.state
             if selector in ("alive", "dead", "dying"):
                 group_list = [player for player in group_list if player.state == selector]
 
             # selecting based on last event
             elif selector == "last_event":
-                group_list = [player for player in group_list if player in self.event_history[0].result_subjects]
+                last_event = event.Event.load(self.g_id, self.event_history[0])
+                group_list = [player for player in group_list if player.p_id in last_event.result_subjects]
 
             # selecting based on Class type
             elif inspect.isclass(selector) and issubclass(selector, Character):
@@ -358,6 +363,9 @@ class Game:
             print("-------"+winners.upper()+"-------")
 
     def check_event_queue(self):
+        print("updating self to match redis")
+        self.load(self.g_id)
+
         if self.state == "game_finished":
             self.end_game()												# tidy up
             return
@@ -375,16 +383,19 @@ class Game:
             new_event = event.EventFactory.create_event(e_type, self.g_id, parent_game=self)
             self.add_event(new_event.e_id)
 
-            self.change_state("new_event")
+            self.change_state("waiting")
         
-        if self.state == "new_event" or self.state == "waiting":				# work through queue
+        #if self.state == "new_event" or self.state == "waiting":				# work through queue
+        if self.state == "waiting":
             print("event in the queue, we've been waiting to start")
             next_event = event.Event.load(self.g_id, self.event_queue[0])
             next_event.start()
-        else:
+        else:   # if self.state = "new_event"
             print("event in progress, resetting callback but nothing changed")
 
-        self.iol.call_later(10, self.check_event_queue)					# permits constant callback. BUG: never cleaned up as I'm not saving the handler to remove from iol.
+        #self.iol.call_later(10, self.check_event_queue)
+        
+        IOLoop.current().call_later(10, self.check_event_queue) # permits constant callback. BUG: never cleaned up as I'm not saving the handler to remove from iol.
 
     def add_event(self, new_event, at_front=False):
         if at_front:
@@ -399,7 +410,27 @@ class Game:
             self.event_queue.remove(old_event_id)
         else:
             warnings.warn("Tried to archive an event that wasn't found in the queue: " + old_event_id)
-        self.event_history.append(old_event_id)
+        
+        if old_event_id not in self.event_history:
+            self.event_history.append(old_event_id)
+        
+        self.save()
+
+    # used to delete an event if there was no effect, for instance if there were no subjects or instigators, or an impossible action was attempted.
+    def delete_event(self, event_location, e_id):
+        if event_location == "event_queue":
+            if e_id in self.event_queue:
+                self.event_queue.remove(e_id)
+            else:
+                warnings.warn("e_id (" + e_id + ") not found in game's (" + self.g_id + ") event_queue")
+        elif event_location == "event_history":
+            if e_id in self.event_history:
+                self.event_history.remove(e_id)
+            else:
+                warnings.warn("e_id (" + e_id + ") not found in game's (" + self.g_id + ") event_history")
+        else:
+            raise ValueError("event_location can only be 'event_queue' or 'event_history'")
+
         self.save()
 
     def get_winners(self):

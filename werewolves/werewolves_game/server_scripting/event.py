@@ -111,7 +111,7 @@ class Event():
 
         ww_redis_db.hset("event:"+self.e_id, "voting_callback_reference", self.voting_callback_reference)
 
-    @staticmethod
+    @staticmethod   # g_id should be redundant... shouldn't it always be with e_id?
     def load(g_id, e_id):
         redis_event = ww_redis_db.hgetall("event:"+e_id)
         redis_event = {k.decode('utf8'): v.decode('utf8') for k, v in redis_event.items()}
@@ -122,6 +122,8 @@ class Event():
         if not redis_event:
             raise ValueError("couldn't load event from redis with e_id: " + e_id)
 
+        if redis_event["game"]:
+            g_id            = redis_event["game"]
         if redis_event["instigators"]:
             instigators     = redis_event["instigators"].split("|")
         if redis_event["subjects"]:
@@ -235,6 +237,7 @@ class Event():
             voting_event.result_subjects = [voting_event.subjects[0]]
 
         parent_game.change_state("finished_voting")
+        voting_event.save()
         voting_event.finish_event()
         return
 
@@ -243,6 +246,9 @@ class Event():
         print("result subjects of the event:"+str(self.result_subjects))
         if self.result_subjects and (self.instigators or self.action_without_instigators):		# only add to history if there is an effect
             parent_game.archive_event(self.e_id)
+        else:
+            parent_game.delete_event("event_queue", self.e_id)
+            print("event deleted from game's event_queue: " + self.e_id)
         
         for p_id in self.result_subjects:	# new events queued will be in reverse order to the order they were added to subjects
             player = wwss.characters.CharacterFactory.create_character(character=None, p_id=p_id)
