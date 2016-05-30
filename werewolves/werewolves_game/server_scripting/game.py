@@ -266,7 +266,7 @@ class Game:
             # selecting based on uuid string
             elif isinstance(selector, str):
                 if uuid.UUID(selector, version=4):
-                    group_list = [player for player in group_list if player.p_id in self.get_player_ids()]
+                    group_list = [player for player in group_list if player.p_id in self.players]
                     print("found p_id in game, returning player object")
 
         return group_list
@@ -477,7 +477,7 @@ class Game:
             leaving_player = self.get_group([leaving_p_id])
         else:
             leaving_p_id = leaving_player.p_id
-            leaving_player = self.get_group([leaving_p_id])
+            leaving_player = self.get_group([leaving_p_id])[0]
 
         if not leaving_player:
             warnings.warn("Leaving player not found in game: "+leaving_p_id)
