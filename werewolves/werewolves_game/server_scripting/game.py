@@ -316,7 +316,7 @@ class Game:
 
     # publishes data to channels based on current state
     # needs to be complemented by a filter function
-    def change_state(self, state):
+    def change_state(self, state, msg=None):
         self.state = state
         self.save()
 
@@ -362,6 +362,8 @@ class Game:
 
             print("-------"+winners.upper()+"-------")
 
+        print(msg)
+
     def check_event_queue(self):
         print("updating self to match redis")
         self.load(self.g_id)
@@ -392,8 +394,6 @@ class Game:
             next_event.start()
         else:   # if self.state = "new_event"
             print("event in progress, resetting callback but nothing changed")
-
-        #self.iol.call_later(10, self.check_event_queue)
         
         IOLoop.current().call_later(10, self.check_event_queue) # permits constant callback. BUG: never cleaned up as I'm not saving the handler to remove from iol.
 
@@ -466,9 +466,8 @@ class Game:
 
         if len(self.players) >= self.options['max_players']:
             print("Game full, starting now")
-            self.change_state("ready")
-            print("starting game in 3 secs")
-            self.iol.call_later(3, self.start_game)     # for production/give a delay
+            self.change_state("ready", "starting game in 3 secs")
+            IOLoop.current().call_later(3, self.start_game)     # for production/give a delay
 
         self.save()
 
