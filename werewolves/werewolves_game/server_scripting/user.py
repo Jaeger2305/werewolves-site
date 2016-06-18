@@ -106,6 +106,8 @@ class User:
         ww_redis_db.hset("player_list:"+self.p_id, "location", self.location)
         ww_redis_db.hset("player_list:"+self.p_id, "g_history", ("|").join(self.g_history))
 
+        self.session.save()
+
     def as_JSON(self, user_json={}, attribute_filter=[]):
         if not attribute_filter or 'p_id' in attribute_filter:
             user_json['p_id'] = self.p_id
@@ -323,7 +325,7 @@ class Player(User):
             log_type    = "INFO"
             log_code    = "Player"
             log_message = "g_id was passed via session and not via kwargs"
-            log_detail  = 3
+            log_detail  = 7
             context_id  = self.p_id
 
             log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)

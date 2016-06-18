@@ -309,7 +309,7 @@ class Game:
                     log_type    = "INFO"
                     log_code    = "Game"
                     log_message = "found p_id in game, returning player object"
-                    log_detail  = 3
+                    log_detail  = 5
                     context_id  = self.g_id
 
                     log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
@@ -574,6 +574,10 @@ class Game:
                     # give joining player information about ingame_players
                     joining_player.gain_info(['p_id', 'name'], info_player=ingame_player)
 
+        joining_player.session['location'] = "ingame"
+        joining_player.session['g_id'] = self.g_id
+        joining_player.save()
+
         log_type    = "INFO"
         log_code    = "Game"
         log_message = "Player (" + joining_p_id + ") has been added to the game"
@@ -608,6 +612,9 @@ class Game:
             traceback.print_exc()
             return
 
+        leaving_player.session['location'] = "outgame"
+        leaving_player.save()
+
         for ingame_player in self.get_players():
             if leaving_player != ingame_player:
                 leaving_player.lose_info(None, info_player=ingame_player, lose_all=True)
@@ -619,7 +626,7 @@ class Game:
         log_type    = "INFO"
         log_code    = "Game"
         log_message = "Player ("+leaving_p_id+") has beem removed from this game"
-        log_detail  = 4
+        log_detail  = 5
         context_id  = self.g_id
 
         log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)

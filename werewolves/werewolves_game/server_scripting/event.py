@@ -234,7 +234,7 @@ class Event():
         log_type    = "INFO"
         log_code    = "Event"
         log_message = "A player just voted for " + p_id_vote
-        log_detail  = 5
+        log_detail  = 7
         context_id  = self.e_id
 
         log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
@@ -258,7 +258,7 @@ class Event():
             log_type    = "INFO"
             log_code    = "Event"
             log_message = "Most common vote was" + p_id_most_common
-            log_detail  = 3
+            log_detail  = 5
             context_id  = self.e_id
 
             log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
