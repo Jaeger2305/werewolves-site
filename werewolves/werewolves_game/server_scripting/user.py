@@ -62,7 +62,7 @@ class User:
 
             self.save()
 
-        print("user initialised and saved: "+self.p_id)
+        #print("user initialised and saved: "+self.p_id)
 
     def __eq__(self, other):
         return self.p_id == other.p_id

@@ -210,6 +210,12 @@ class Game:
     def delete(self):
         ww_redis_db.delete("g_list:"+self.g_id)
 
+        for e_id in self.event_history:
+            ww_redis_db.delete("event:"+e_id)
+
+        for e_id in self.event_queue:
+            ww_redis_db.delete("event:"+e_id)
+
     # in here in case I want to chain together multiple operations, avoiding multiple DB calls. More faff than it's worth?
     def is_saved(self):
         if self.saved:
@@ -312,7 +318,16 @@ class Game:
         self.check_event_queue()
 
     def end_game(self):
-        raise NotImplementedError
+        # log game into Relational DB
+        
+        # remove players from game
+        print("removing players from game")
+        for p_id in self.players:
+            self.remove_player(leaving_p_id = p_id)
+
+        # delete game from redis
+        print("Deleting game from redis")
+        self.delete()
 
     # publishes data to channels based on current state
     # needs to be complemented by a filter function
@@ -473,7 +488,7 @@ class Game:
 
     def remove_player(self, leaving_p_id=None, leaving_player=None):
         if leaving_p_id:
-            leaving_player = self.get_group([leaving_p_id])
+            leaving_player = self.get_group([leaving_p_id])[0]
         else:
             leaving_p_id = leaving_player.p_id
             leaving_player = self.get_group([leaving_p_id])[0]

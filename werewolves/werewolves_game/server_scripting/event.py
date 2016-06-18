@@ -249,6 +249,7 @@ class Event():
         else:
             parent_game.delete_event("event_queue", self.e_id)
             print("event deleted from game's event_queue: " + self.e_id)
+            ww_redis_db.delete("event:"+self.e_id)
         
         for p_id in self.result_subjects:	# new events queued will be in reverse order to the order they were added to subjects
             player = wwss.characters.CharacterFactory.create_character(character=None, p_id=p_id)
