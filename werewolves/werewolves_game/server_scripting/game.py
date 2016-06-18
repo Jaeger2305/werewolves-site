@@ -24,6 +24,7 @@ import werewolves_game.server_scripting.user as user
 from werewolves_game.server_scripting.characters import Human, Werewolf, Witch, Character, CharacterFactory
 import werewolves_game.server_scripting as wwss
 import werewolves_game.server_scripting.event as event
+from werewolves_game.server_scripting.log import log_handler
 
 from tornado.ioloop import PeriodicCallback, IOLoop
 from swampdragon.pubsub_providers.data_publisher import publish_data
@@ -62,8 +63,14 @@ class Game:
         try:
             self.load(g_id)
         except Exception as error:
-            print(error)
-            print("Creating default game values")
+            log_type    = "ERROR"
+            log_code    = "Game"
+            log_message = str(error) + ": Creating default game values"
+            log_detail  = 4
+            context_id  = g_id
+
+            log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
+
             self.g_id = str(uuid.uuid4())
             self.g_round = 0
             self.name = name
@@ -72,7 +79,13 @@ class Game:
         self.saved = False		    # enables chain editing
         self.iol = IOLoop.current()	# main tornado loop uses for callbacks
 
-        print("I just init'd game: " + self.g_id)
+        log_type    = "INFO"
+        log_code    = "Memory"
+        log_message = "Game initialised"
+        log_detail  = 4
+        context_id  = self.g_id
+
+        log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
 
     def __eq__(self, other):
         return self.g_id == other.g_id
@@ -106,7 +119,13 @@ class Game:
 
         self.saved = True
         
-        print("I saved loaded game: " + self.g_id)
+        log_type    = "INFO"
+        log_code    = "Memory"
+        log_message = "Games has been saved."
+        log_detail  = 2
+        context_id  = self.g_id
+
+        log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
 
     def load(self, g_id):
         if g_id is None:
@@ -198,8 +217,13 @@ class Game:
             if player.p_id in filters:
                 players_json[player.p_id] = player.as_JSON(player_json={}, attribute_filter=filters[player.p_id])
             else:
-                print("You were probably expecting a different p_id. Check the User() init function!")
+                log_type    = "ERROR"
+                log_code    = "Game"
+                log_message = "You were probably expecting a different p_id. Check the User() init function!"
+                log_detail  = 4
+                context_id  = self.g_id
 
+                log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
 
         game_obj = json.loads(game_json)
         game_obj['players'] = players_json
@@ -215,6 +239,14 @@ class Game:
 
         for e_id in self.event_queue:
             ww_redis_db.delete("event:"+e_id)
+
+        log_type    = "INFO"
+        log_code    = "Redis"
+        log_message = "Events and game has been removed from redis"
+        log_detail  = 3
+        context_id  = self.g_id
+
+        log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
 
     # in here in case I want to chain together multiple operations, avoiding multiple DB calls. More faff than it's worth?
     def is_saved(self):
@@ -273,7 +305,14 @@ class Game:
             elif isinstance(selector, str):
                 if uuid.UUID(selector, version=4):
                     group_list = [player for player in group_list if player.p_id in self.players]
-                    print("found p_id in game, returning player object")
+
+                    log_type    = "INFO"
+                    log_code    = "Game"
+                    log_message = "found p_id in game, returning player object"
+                    log_detail  = 3
+                    context_id  = self.g_id
+
+                    log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
 
         return group_list
 
@@ -300,14 +339,40 @@ class Game:
 
         for player in temp_characters:
             player.save()
-            print(player.character)
+            log_type    = "INFO"
+            log_code    = "Player"
+            log_message = "After assigning the roles, this player is " + player.character
+            log_detail  = 3
+            context_id  = player.p_id
+
+            log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
+
+        log_type    = "INFO"
+        log_message = "Character roles assigned"
+        context_id  = self.g_id
+        log_code    = "Game"
+
+        log_handler.log(log_type, log_code, log_message, context_id=context_id)
 
     def start_game(self):
-        print("game starting")
+        log_type    = "INFO"
+        log_code    = "Game"
+        log_message = "Game beginning"
+        log_detail  = 1
+        context_id  = self.g_id
+
+        log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
+
         self.assign_roles()
         self.change_state("waiting")
 
-        print("First round: night dawns.")
+        log_type    = "INFO"
+        log_code    = "Game"
+        log_message = "First round: night dawns"
+        log_detail  = 3
+        context_id  = self.g_id
+
+        log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
         
         self.g_round += 1
 
@@ -321,38 +386,44 @@ class Game:
         # log game into Relational DB
         
         # remove players from game
-        print("removing players from game")
         for p_id in self.players:
-            self.remove_player(leaving_p_id = p_id)
+            self.remove_player(leaving_p_id=p_id)
 
         # delete game from redis
-        print("Deleting game from redis")
         self.delete()
+
+        log_type    = "INFO"
+        log_code    = "Game"
+        log_message = "Game has ended and been deleted from Redis memory"
+        log_detail  = 1
+        context_id  = self.g_id
+
+        log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
 
     # publishes data to channels based on current state
     # needs to be complemented by a filter function
-    def change_state(self, state, msg=None):
+    def change_state(self, state, msg=""):
         self.state = state
         self.save()
 
         data_dict = {}
 
         if state == "lobby":
-            print("waiting for more players")
+            msg = "waiting for more players. " + msg
 
         if state == "ready":
-            print("publishing ready info")
+            msg = "publishing ready info. " + msg
 
         if state == "waiting":
-            print("waiting for event")
+            msg = "waiting for event. " + msg
 
         if state == "new_event":
             new_event = self.get_event_queue()[0]
-            print("new event starting: " + new_event.e_type)
+            msg = "new event starting: " + new_event.e_type + ". " + msg
             data_dict["event"] = new_event.e_type
 
         if state == "voting":
-            print("Waiting 10s to collect votes")
+            msg = "Waiting 10s to collect votes. " + msg
 
             cur_event = self.get_event_queue()[0]
 
@@ -367,28 +438,39 @@ class Game:
                 publish_data("player:"+p_id, data_dict)
 
         if state == "finished_voting":
-            print("Votes collected, performing result")
+            msg = "Votes collected, performing result"
 
         if state == "game_finished":
-            #save to DB, kick all players etc.
-            winners = "These guys won: "
+            msg = msg + "These guys won: "
             for group in self.get_winners():
-                winners = winners+group+", "
+                msg = msg + group + ", "
 
-            print("-------"+winners.upper()+"-------")
+            msg = "-------"+msg.upper()+"-------"
 
-        print(msg)
+        log_type    = "INFO"
+        log_code    = "Game"
+        log_message = msg
+        log_detail  = 2
+        context_id  = self.g_id
+
+        log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
+
 
     def check_event_queue(self):
-        print("updating self to match redis")
         self.load(self.g_id)
 
         if self.state == "game_finished":
             self.end_game()												# tidy up
             return
 
-        if not self.event_queue:										# add new event based on round
-            print("No event in queue, adding day/night")
+        if not self.event_queue:                            # add new event based on round
+            log_type    = "INFO"
+            log_code    = "Game"
+            log_message = "No event in queue, adding day/night"
+            log_detail  = 5
+            context_id  = self.g_id
+
+            log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
 
             self.g_round += 1
 
@@ -402,13 +484,26 @@ class Game:
 
             self.change_state("waiting")
         
-        #if self.state == "new_event" or self.state == "waiting":				# work through queue
+        #if self.state == "new_event" or self.state == "waiting":               # work through queue
         if self.state == "waiting":
-            print("event in the queue, we've been waiting to start")
+            log_type    = "INFO"
+            log_code    = "Game"
+            log_message = "event in the queue, we've been waiting to start"
+            log_detail  = 5
+            context_id  = self.g_id
+
+            log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
+
             next_event = event.Event.load(self.g_id, self.event_queue[0])
             next_event.start()
         else:   # if self.state = "new_event"
-            print("event in progress, resetting callback but nothing changed")
+            log_type    = "INFO"
+            log_code    = "Game"
+            log_message = "Event in progress, resetting callback but nothing changed"
+            log_detail  = 5
+            context_id  = self.g_id
+
+            log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
         
         IOLoop.current().call_later(10, self.check_event_queue) # permits constant callback. BUG: never cleaned up as I'm not saving the handler to remove from iol.
 
@@ -468,7 +563,7 @@ class Game:
             raise ValueError
         if joining_p_id not in self.players:
             self.players.append(joining_p_id)
-            self.save() # all changes to the game must be immediately saved! otherwise due to call stacks, this would overwrite the new changes. I can help ease this problem by passing by reference in particular circumstances.
+            self.save() # all changes to the game must be immediately saved! otherwise due to call stacks, this would overwrite the new changes. You could pass by reference, but probably better to call load from redis again
 
             # share around generic information
             for ingame_player in self.get_players():
@@ -479,8 +574,23 @@ class Game:
                     # give joining player information about ingame_players
                     joining_player.gain_info(['p_id', 'name'], info_player=ingame_player)
 
+        log_type    = "INFO"
+        log_code    = "Game"
+        log_message = "Player (" + joining_p_id + ") has been added to the game"
+        log_detail  = 5
+        context_id  = self.g_id
+
+        log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
+
         if len(self.players) >= self.options['max_players']:
-            print("Game full, starting now")
+            log_type    = "INFO"
+            log_code    = "Game"
+            log_message = "Game full, starting now."
+            log_detail  = 2
+            context_id  = self.g_id
+
+            log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
+
             self.change_state("ready", "starting game in 3 secs")
             IOLoop.current().call_later(3, self.start_game)     # for production/give a delay
 
@@ -505,7 +615,21 @@ class Game:
 
         while leaving_p_id in self.players:
             self.players.remove(leaving_p_id)
-        
+
+        log_type    = "INFO"
+        log_code    = "Game"
+        log_message = "Player ("+leaving_p_id+") has beem removed from this game"
+        log_detail  = 4
+        context_id  = self.g_id
+
+        log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
+
+        log_code    = "Player"
+        log_message = "This player has left the game (self.g_id)"
+        log_detail  = 4
+        context_id  = leaving_p_id
+
+        log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
         self.save()
 
 

@@ -1,6 +1,7 @@
 # user.location = ['ingame', 'kicked', 'searching', 'finished', 'outgame']
 # player.state = ['alive', 'dead']
 
+# Built in libraries
 import redis
 import uuid
 import json
@@ -11,6 +12,7 @@ import warnings
 from pympler import muppy
 from pympler import summary
 
+# Plugin libraries
 from importlib import import_module
 from django.conf import settings
 SessionStore = import_module(settings.SESSION_ENGINE).SessionStore
@@ -18,8 +20,10 @@ SessionStore = import_module(settings.SESSION_ENGINE).SessionStore
 from tornado.ioloop import PeriodicCallback, IOLoop
 from swampdragon.pubsub_providers.data_publisher import publish_data
 
-import werewolves_game.server_scripting as wwss
-from werewolves_game.server_scripting.redis_util import *
+# Custom libraries
+import  werewolves_game.server_scripting            as wwss
+from    werewolves_game.server_scripting.redis_util import *
+from    werewolves_game.server_scripting.log        import log_handler
 
 
 
@@ -47,8 +51,13 @@ class User:
             self.p_id = p_id
             self.load(p_id)
         except Exception as error:
-            print("couldn't load user's p_id from redis: "+str(error))
-            print("putting in default values")
+            log_type    = "ERROR"
+            log_code    = "Player"
+            log_message = "Couldn't load user's p_id from redis, putting in default values: "+str(error)
+            log_detail  = 3
+            context_id  = self.p_id
+
+            log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
 
             self.name = "Richard"
             self.p_id = str(uuid.uuid4())
@@ -62,7 +71,13 @@ class User:
 
             self.save()
 
-        #print("user initialised and saved: "+self.p_id)
+        log_type    = "INFO"
+        log_code    = "Memory"
+        log_message = "User initialised and saved"
+        log_detail  = 7
+        context_id  = self.p_id
+
+        log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
 
     def __eq__(self, other):
         return self.p_id == other.p_id
@@ -242,16 +257,34 @@ class Player(User):
 
         if p_id not in self.knows_about:
             warnings.warn("No info held on this character anyway")
+            log_type    = "WARNING"
+            log_code    = "Player"
+            log_message = "Player does not have information on: " + p_id + ". This could be because you're iterating through a loop which removes information from both source and target (see game.end_game())"
+            log_detail  = 4
+            context_id  = self.p_id
+
+            log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
+            return
 
         # populate list with all keys if knows about everything (filter on None)
         if self.knows_about[p_id] is None:
             self.knows_about[p_id] = Player(p_id).broadcastable
 
-        print("Player " + self.p_id+ " is losing " + p_id + "from knows_about dict. Before:\n")
-        print(self.knows_about.items())
+        log_type    = "INFO"
+        log_message = "Player is losing p_id " + p_id + " from knows_about dict"
+        context_id  = self.p_id
+        log_code    = "Player"
+
+        log_handler.log(log_type, log_code, log_message, context_id=context_id)
         
         if lose_all:
-            print("losing all info!")
+            log_type    = "INFO"
+            log_code    = "Player"
+            log_message = "Losing all information on p_id " + p_id
+            log_detail  = 4
+            context_id  = self.p_id
+
+            log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
             self.knows_about.pop(p_id)
 
         else:
@@ -261,10 +294,13 @@ class Player(User):
                 elif attribute in self.knows_about[p_id]:
                     self.knows_about[p_id].remove(attribute)
                 else:
-                    print("attribute: "+attribute+" was not found in player: "+self.p_id+"'s knows_about")
+                    log_type    = "INFO"
+                    log_code    = "Player"
+                    log_message = "attribute: "+attribute+" was not found in this players knows_about list"
+                    log_detail  = 4
+                    context_id  = self.p_id
 
-        print("After:\n")
-        print(self.knows_about.items())
+                    log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
 
         self.save()
 
@@ -283,7 +319,14 @@ class Player(User):
             player_game = wwss.game.Game(kwargs['g_id'])
         elif 'g_id' in self.session:
             player_game = wwss.game.Game(self.session['g_id'])
-            print("g_id wasn't passed into leave game via kwargs? :S")
+
+            log_type    = "INFO"
+            log_code    = "Player"
+            log_message = "g_id was passed via session and not via kwargs"
+            log_detail  = 3
+            context_id  = self.p_id
+
+            log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
         elif self.session.has_key("location") and self.session['location'] == "outgame":
             result['error'] = "Player not currently in a game."
             return result

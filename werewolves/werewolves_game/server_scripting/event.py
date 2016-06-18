@@ -11,6 +11,7 @@ from tornado.ioloop import IOLoop
 import werewolves_game.server_scripting as wwss
 from werewolves_game.server_scripting.redis_util import *
 from werewolves_game.server_scripting.callback_handling import callback_handler
+from werewolves_game.server_scripting.log import log_handler
 
 # global callback handling/cancelling singleton
 # class callback_handling:
@@ -179,11 +180,16 @@ class Event():
         return json.dumps(event_json, sort_keys=True, indent=4)
 
     def start(self):
-        print("subjects of the event"+str(self.subjects))
-        print("instigators of the event:"+str(self.instigators))
+        log_type    = "INFO"
+        log_code    = "Event"
+        log_message = "Subjects of the event: " + str(self.subjects) + ". Instigators are: " + str(self.instigators)
+        log_detail  = 3
+        context_id  = self.e_id
+
+        log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
 
         if not self.subjects or not self.instigators:
-            self.finish_event()
+            self.finish_event()     # has a 3 second pause to allow async to catch up and prevent needless call stack preservation
             return
         
         parent_game = wwss.game.Game(self.g_id)
@@ -191,12 +197,25 @@ class Event():
 
         if len(self.subjects) > 1 or len(self.instigators) > 1:
             if len(self.subjects) != 1 and len(self.instigators) != 1:
-                print("holding votes, multiple options available")
+                log_type    = "INFO"
+                log_code    = "Event"
+                log_message = "Multiple options are available and a vote must be held."
+                log_detail  = 5
+                context_id  = self.e_id
+
+                log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
                 self.hold_vote()
-        
+
         if len(self.subjects) == 1:
             self.result_subjects = self.subjects
-            print("only 1 option, starting it immediately")
+
+            log_type    = "INFO"
+            log_code    = "Event"
+            log_message = "Only one option found, beginning immediately."
+            log_detail  = 5
+            context_id  = self.e_id
+
+            log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
             self.finish_event()
 
     def hold_vote(self):
@@ -211,8 +230,15 @@ class Event():
     def add_vote(g_id, e_id, p_id_vote, voting_by_p_id=None):
         voting_event = Event.load(g_id, e_id)
         parent_game = wwss.game.Game(g_id)
-        
-        print("Player just voted for: " + p_id_vote)
+
+        log_type    = "INFO"
+        log_code    = "Event"
+        log_message = "A player just voted for " + p_id_vote
+        log_detail  = 5
+        context_id  = self.e_id
+
+        log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
+
         voting_event.votes.append(p_id_vote)
 
         if len(voting_event.votes) == len(voting_event.voters):
@@ -228,12 +254,27 @@ class Event():
 
         if voting_event.votes:
             p_id_most_common = Counter(voting_event.votes).most_common(1)
-            print("most common vote was: "+p_id_most_common)
+
+            log_type    = "INFO"
+            log_code    = "Event"
+            log_message = "Most common vote was" + p_id_most_common
+            log_detail  = 3
+            context_id  = self.e_id
+
+            log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
+
             voting_event.result_subjects = [p_id_most_common]
         else:
             shuffle(voting_event.subjects)
-            print("No votes given, picking random:")
-            print(voting_event.subjects[0])
+
+            log_type    = "INFO"
+            log_code    = "Event"
+            log_message = "No votes were given, a random choice has been selected: " + voting_event.subjects[0]
+            log_detail  = 5
+            context_id  = e_id
+
+            log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
+
             voting_event.result_subjects = [voting_event.subjects[0]]
 
         parent_game.change_state("finished_voting")
@@ -243,12 +284,28 @@ class Event():
 
     def finish_event(self):
         parent_game = wwss.game.Game(self.g_id)
-        print("result subjects of the event:"+str(self.result_subjects))
+
+        log_type    = "INFO"
+        log_code    = "Event"
+        log_message = "Result subjects of the event:"+str(self.result_subjects)
+        log_detail  = 5
+        context_id  = self.e_id
+
+        log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
+
         if self.result_subjects and (self.instigators or self.action_without_instigators):		# only add to history if there is an effect
             parent_game.archive_event(self.e_id)
         else:
             parent_game.delete_event("event_queue", self.e_id)
-            print("event deleted from game's event_queue: " + self.e_id)
+
+            log_type    = "INFO"
+            log_code    = "Event"
+            log_message = "This event has been deleted from its game's event_queue"
+            log_detail  = 5
+            context_id  = self.e_id
+
+            log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
+
             ww_redis_db.delete("event:"+self.e_id)
         
         for p_id in self.result_subjects:	# new events queued will be in reverse order to the order they were added to subjects

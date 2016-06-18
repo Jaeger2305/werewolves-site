@@ -63,6 +63,9 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="werewolves_game\server_scripting\characters.py" />
+    <Compile Include="werewolves_game\server_scripting\log.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="werewolves_game\server_scripting\db_mod.py" />
     <Compile Include="werewolves_game\server_scripting\event.py" />
     <Compile Include="werewolves_game\server_scripting\game.py" />
