@@ -1,4 +1,5 @@
 from tornado.ioloop import IOLoop
+from werewolves_game.server_scripting.log import log_handler
 
 class Singleton:
     """
@@ -56,11 +57,26 @@ class CallbackHandling:
 
         self.callbacks[id][callback_reference] = callback_handler
 
+        log_handler.log(
+            log_type        = "INFO",
+            log_code        = "Callbacks",
+            log_message     = "Added callback reference to self.callbacks["+str(id)+"]["+str(callback_reference)+"]",
+            log_detail      = 7,
+            context_id      = None
+        )
+
         return callback_reference
 
     def remove_callback(self, id, callback_reference):
         self.iol.remove_timeout(timeout=self.callbacks[id][int(callback_reference)])
         self.callbacks[id].pop(int(callback_reference))
+
+        log_handler.log(
+            log_type        = "INFO",
+            log_code        = "Callbacks",
+            log_message     = "Removed callback reference from self.callbacks["+str(id)+"]["+str(callback_reference)+"]",
+            log_detail      = 7
+        )
 
     def cleanup(self):
         raise NotImplementedError

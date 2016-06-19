@@ -25,6 +25,7 @@ from werewolves_game.server_scripting.characters import Human, Werewolf, Witch, 
 import werewolves_game.server_scripting as wwss
 import werewolves_game.server_scripting.event as event
 from werewolves_game.server_scripting.log import log_handler
+from werewolves_game.server_scripting.callback_handling import callback_handler
 
 from tornado.ioloop import PeriodicCallback, IOLoop
 from swampdragon.pubsub_providers.data_publisher import publish_data
@@ -108,6 +109,11 @@ class Game:
             old_events_string = "|".join(self.event_history)
         ww_redis_db.hset("g_list:"+self.g_id, "event_history", old_events_string)
 
+        if hasattr(self, 'redis_cleanup_callback_reference'):
+            if self.redis_cleanup_callback_reference is not None:
+                ww_redis_db.hset("g_list:"+self.g_id, "redis_cleanup_callback_reference", self.redis_cleanup_callback_reference)
+
+
         games_dict = {}
         data_dict = {}
         games_dict["json"] = self.as_JSON()
@@ -121,7 +127,7 @@ class Game:
         
         log_type    = "INFO"
         log_code    = "Memory"
-        log_message = "Games has been saved."
+        log_message = "Game has been saved."
         log_detail  = 2
         context_id  = self.g_id
 
@@ -167,6 +173,9 @@ class Game:
                     self.add_event(e_id)
 
         self.state = redis_game['state']
+
+        if 'redis_cleanup_callback_reference' in redis_game:
+            self.redis_cleanup_callback_reference = redis_game['redis_cleanup_callback_reference']
 
         return True
 
@@ -231,7 +240,12 @@ class Game:
 
         return game_json
 
-    def delete(self):
+    def redis_cleanup(self):
+        # players might need updating just to be doubly sure!!
+        if hasattr(self, 'redis_cleanup_callback_reference') and self.redis_cleanup_callback_reference:
+            callback_handler.remove_callback(self.g_id, self.redis_cleanup_callback_reference)
+            self.redis_cleanup_callback_reference = None
+
         ww_redis_db.delete("g_list:"+self.g_id)
 
         for e_id in self.event_history:
@@ -240,13 +254,13 @@ class Game:
         for e_id in self.event_queue:
             ww_redis_db.delete("event:"+e_id)
 
-        log_type    = "INFO"
-        log_code    = "Redis"
-        log_message = "Events and game has been removed from redis"
-        log_detail  = 3
-        context_id  = self.g_id
-
-        log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
+        log_handler.log(
+            log_type        = "INFO",
+            log_code        = "Redis",
+            log_message     = "Events and game has been removed from redis",
+            log_detail      = 3,
+            context_id      = self.g_id
+        )
 
     # in here in case I want to chain together multiple operations, avoiding multiple DB calls. More faff than it's worth?
     def is_saved(self):
@@ -390,7 +404,7 @@ class Game:
             self.remove_player(leaving_p_id=p_id)
 
         # delete game from redis
-        self.delete()
+        self.redis_cleanup()
 
         log_type    = "INFO"
         log_code    = "Game"
@@ -555,6 +569,18 @@ class Game:
         return winners
 
     def add_player(self, joining_p_id=None, joining_player=None):
+        # if redis game cleanup was initated but a new player has joined, remove the cleanup callback
+        if hasattr(self, 'redis_cleanup_callback_reference') and self.redis_cleanup_callback_reference:
+            callback_handler.remove_callback(self.g_id, self.redis_cleanup_callback_reference)
+            self.redis_cleanup_callback_reference = None
+            log_handler.log(
+                log_type        = "INFO",
+                log_code        = "Callbacks",
+                log_message     = "Preventing game deletion",
+                log_detail      = 5,
+                context_id      = self.g_id
+            )
+
         if joining_p_id:
             joining_player = user.Player(p_id=joining_p_id)
         elif joining_player:
@@ -632,11 +658,20 @@ class Game:
         log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
 
         log_code    = "Player"
-        log_message = "This player has left the game (self.g_id)"
+        log_message = "This player has left the game ("+self.g_id+")"
         log_detail  = 4
         context_id  = leaving_p_id
 
         log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
+
+        # if there are no players left, initiate countdown for redis cleanup
+        if len(self.players) == 0:
+            callback_handle = IOLoop.current().call_later(10, self.redis_cleanup)  # self works here because the data the cleanup needs should not change
+            self.redis_cleanup_callback_reference = callback_handler.add_callback(self.g_id, callback_handle)
+
+            log_message = "Initiating game deletion in 10 seconds."
+            log_handler.log(log_message=log_message, log_to_file=True)
+
         self.save()
 
 

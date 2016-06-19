@@ -13,7 +13,8 @@ class log():
         "Player",
         "Event",
         "Memory",
-        "CurrentDev"
+        "CurrentDev",
+        "Callbacks"
     ]
 
     csv_delimiter = "|"
@@ -36,7 +37,7 @@ class log():
             if log_code not in log.all_log_codes:
                 raise ValueError("log_code supplied invalid")
 
-    def log(self, log_type, log_code, log_message, log_detail=1, scenario=None, context_id="", log_to_file=False, log_override=False):
+    def log(self, log_type="INFO", log_code="CurrentDev", log_message="", log_detail=1, scenario=None, context_id="", log_to_file=False, log_override=False):
         """ Main log function
             log_type            - the type of message (error, info, warning)
             log_code            - the category of the system that the log refers to (see log.all_log_codes)
@@ -123,4 +124,4 @@ log_codes = [
     "CurrentDev"
 ]
 
-log_handler = log(log_codes=log_codes, log_detail=3, log_file="2016-06-18Log.txt")
+log_handler = log(log_codes=log_codes, log_detail=10, log_file="2016-06-18Log.txt")
