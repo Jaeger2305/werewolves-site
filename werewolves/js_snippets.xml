@@ -1,0 +1,140 @@
+﻿<!-- INSTRUCTIONS:
+    save these XMLs into separate files at <Program directory>\Microsoft Visual Studio 14.0\Common7\IDE\Extensions\Microsoft\Python Tools for Visual Studio\2.2\Snippets\1033\Python
+-->
+
+<?xml version="1.0" encoding="utf-8"?>
+<CodeSnippets xmlns="http://schemas.microsoft.com/VisualStudio/2005/CodeSnippet">
+  <CodeSnippet Format="1.0.0">
+    <Header>
+      <Title>Header comment</Title>
+      <Shortcut>Header</Shortcut>
+      <Description>Header statement for script</Description>
+      <Author>Richard Webb</Author>
+      <SnippetTypes>
+        <SnippetType>SurroundsWithStatement</SnippetType>
+        <SnippetType>Expansion</SnippetType>
+      </SnippetTypes>
+    </Header>
+    <Snippet>
+      <Declarations>
+        <Literal>
+          <ID>file</ID>
+          <ToolTip>The name of the file</ToolTip>
+          <Default>file_name</Default>
+        </Literal>
+        <Literal>
+          <ID>author</ID>
+          <ToolTip>The name of the author</ToolTip>
+          <Default>Richard Webb</Default>
+        </Literal>
+		<Literal>
+          <ID>date_day</ID>
+          <ToolTip>Day in the form of 2 digits</ToolTip>
+          <Default>DD</Default>
+        </Literal>
+        <Literal>
+          <ID>date_month</ID>
+          <ToolTip>Month in the form of 2 digits</ToolTip>
+          <Default>MM</Default>
+        </Literal>
+        <Literal>
+          <ID>date_year</ID>
+          <ToolTip>Year in the form of 4 digits</ToolTip>
+          <Default>2016</Default>
+        </Literal>
+        <Literal>
+          <ID>short_description</ID>
+          <ToolTip>One line sentence describing purpose of script</ToolTip>
+          <Default>One_line_sentence_describing_purpose_of_script</Default>
+        </Literal>
+        <Literal>
+          <ID>detailed_description</ID>
+          <ToolTip>Detailed purpose of script</ToolTip>
+          <Default>Detailed_purpose_of_script</Default>
+        </Literal>
+        <Literal>
+          <ID>version</ID>
+          <ToolTip>Version number in the form of major.minor</ToolTip>
+          <Default>1.0</Default>
+        </Literal>
+      </Declarations>
+      <Code Language="Javascript">
+        <![CDATA[$ $
+/***********************************************************************************************************************
+* File :                $file$
+* Author :              $author$
+* Date :                $date_day$/$date_month$/$date_year
+* Short description :   $short_description$
+* Full description :    $full_description$
+*
+* -------------------------------------------------
+* Version     Date          Author      Description
+* -------------------------------------------------
+* $version$         $date_day$/$date_month$/$date_year    $author$         Initial version
+*
+***********************************************************************************************************************/]]></Code>
+    </Snippet>
+  </CodeSnippet>
+</CodeSnippets>
+
+
+
+<?xml version="1.0" encoding="utf-8"?>
+<CodeSnippets xmlns="http://schemas.microsoft.com/VisualStudio/2005/CodeSnippet">
+  <CodeSnippet Format="1.0.0">
+    <Header>
+      <Title>tab120</Title>
+      <Shortcut>tab120</Shortcut>
+      <Description>Comment block that stretches across the page</Description>
+      <Author>Richard Webb</Author>
+      <SnippetTypes>
+        <SnippetType>SurroundsWithStatement</SnippetType>
+        <SnippetType>Expansion</SnippetType>
+      </SnippetTypes>
+    </Header>
+    <Snippet>
+      <Declarations>
+        <Literal>
+          <ID>comment</ID>
+          <ToolTip>The comment you want to make.</ToolTip>
+          <Default>Comment_goes_here</Default>
+        </Literal>
+      </Declarations>
+      <Code Language="Javascript">
+  <![CDATA[$ $
+/***********************************************************************************************************************
+* $comment$
+***********************************************************************************************************************/$ $]]></Code>
+</Snippet>  
+</CodeSnippet>
+</CodeSnippets>
+
+
+<?xml version="1.0" encoding="utf-8"?>
+<CodeSnippets xmlns="http://schemas.microsoft.com/VisualStudio/2005/CodeSnippet">
+  <CodeSnippet Format="1.0.0">
+    <Header>
+      <Title>tab60</Title>
+      <Shortcut>tab60</Shortcut>
+      <Description>Comment block that appears 60 characters in from the left.</Description>
+      <Author>Richard Webb</Author>
+      <SnippetTypes>
+        <SnippetType>SurroundsWithStatement</SnippetType>
+        <SnippetType>Expansion</SnippetType>
+      </SnippetTypes>
+    </Header>
+    <Snippet>
+      <Declarations>
+        <Literal>
+          <ID>comment</ID>
+          <ToolTip>The comment you want to make.</ToolTip>
+          <Default>Comment_goes_here</Default>
+        </Literal>
+      </Declarations>
+      <Code Language="Javascript"><![CDATA[$ $
+                                                            /***********************************************************
+                                                            * $comment$
+                                                            ***********************************************************/]]></Code>
+    </Snippet>  
+  </CodeSnippet>
+</CodeSnippets>
