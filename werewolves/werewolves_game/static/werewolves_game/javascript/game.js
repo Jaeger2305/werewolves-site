@@ -69,8 +69,6 @@ function Game(json, g_id, players, state){
 		);
 	}
 	this.state = state;
-
-	game_manager.add_game(this);
 }
 
 Game.prototype.update = function(json){
