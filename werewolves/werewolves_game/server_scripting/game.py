@@ -669,8 +669,13 @@ class Game:
             callback_handle = IOLoop.current().call_later(10, self.redis_cleanup)  # self works here because the data the cleanup needs should not change
             self.redis_cleanup_callback_reference = callback_handler.add_callback(self.g_id, callback_handle)
 
-            log_message = "Initiating game deletion in 10 seconds."
-            log_handler.log(log_message=log_message, log_to_file=True)
+            log_handler.log(
+                log_type        = "INFO",
+                log_code        = "Redis",
+                log_message     = "Initiating game deletion in 10 seconds",
+                log_detail      = 5,
+                context_id      = self.g_id
+            )
 
         self.save()
 

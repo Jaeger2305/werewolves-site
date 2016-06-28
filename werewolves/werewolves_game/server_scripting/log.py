@@ -115,7 +115,6 @@ class log():
 # Configure this run
 log_codes = [
     "Server",
-    "Redis",
     "RDBMS",
     "Client",
     "Game",
@@ -124,4 +123,4 @@ log_codes = [
     "CurrentDev"
 ]
 
-log_handler = log(log_codes=log_codes, log_detail=10, log_file="2016-06-18Log.txt")
+log_handler = log(log_codes=log_codes, log_detail=3, log_file="2016-06-18Log.txt")
