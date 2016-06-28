@@ -6,6 +6,20 @@
 <link rel="stylesheet" type="text/css" href="{% static 'werewolves_game/stylesheets/style.css' %}" />
 <script type="text/javascript" src="{% static 'werewolves_game/javascript/jquery-1.11.3.js' %}"></script>
 <script type="text/javascript" src="{% static 'werewolves_game/javascript/game.js' %}"></script>
+
+<script>$.ajax({
+    crossDomain: true,
+    dataType: "script",
+    url:"{% static 'werewolves_game/javascript/swampdragon_init.js' %}",
+});
+</script>
+<script>$.ajax({
+    crossDomain: true,
+    dataType: "script",
+    url: "{% static 'werewolves_game/javascript/swampdragon_listener.js' %}"
+});
+</script>
+
 <script type="text/javascript" src="{% static 'werewolves_game/javascript/session.js' %}"></script>
 
 <h1>Werewolves the game</h1>
@@ -76,117 +90,6 @@ console.log("working");
 session_key = "{{ response }}";
 
 <!-- Swampdragon -->
-swampdragon.onChannelMessage(function(channels, message){
-	if (message.data.channel === "lobbyinfo"){}
-	if (message.data.channel === "sysmsg"){
-		$("#server_updates").prepend("<span class='message'>"+message.data.message+"</span>");
-	}
-	if (message.data.channel === "player_list"){
-		console.log(message.data);
-	}
-	if (message.data.channel.startsWith("game")){
-		// message.data.channel expected output is game:g_id
-		// if game:g_id:event
-		// else if game:g_id:player
-		// else update all
-		var game_json = JSON.parse(message.data.game.json);
-		console.log("game_json:");
-		console.log(game_json);
-		game = game_manager.find(game_json.g_id);
-		if (game)
-			game.update(game_json);
-		else {
-			var newGame = new Game(game_json);
-			game_manager.add_game(newGame);
-		}
-		game_manager.display();
-	}
-	if (message.data.type == "message")
-		myPlayer.receive_message(message.data.message, message.data.sender, message.data.target, message.data.time);
-	
-	console.log(message.data.channel);
-});
-
-swampdragon.ready(function(){
-	swampdragon.subscribe('lobby', 'default', {'session_key':session_key}, null, null);
-	console.log("subscribed");
-
-	swampdragon.callRouter('init', 'lobby', {'session_key':session_key}, function(context, data){
-		console.log("message pushed locally: "+data);
-	});
-
-	$("#quick_match").on('click', function(){
-		swampdragon.callRouter('matchmaking', 'lobby', {'session_key':$('#sessionID').html(), 'action':'join_game'}, function(context, data){
-			swampdragon.subscribe('lobby', 'misc', {'session_key':$('#sessionID').html()}, null, null);
-			console.log(data);
-			$('#server_updates').prepend("<span class='message'>"+data.text+": "+data.g_id+"</span>");
-		});
-	});
-
-	$("#leave_match").on('click', function(){
-		// call popup with parameters to fill out
-		var parameters = {'session_key': $('#sessionID').html(), 'action':'leave_game'};
-		swampdragon.callRouter('matchmaking', 'lobby', parameters, function(context, data){
-			var parameters = {	'session_key': $('#sessionID').html(),
-								'action': 'unsubscribe', 
-								'listener': 'game'};
-			swampdragon.unsubscribe('lobby', 'game', parameters, function(context, data){
-				console.log("unsubscription from game messages complete");
-				console.log(data);
-				$('#server_updates').prepend("<span class='message'>"+data+"</span>");
-			});
-		});
-	});
-
-	$("#flush_db").on('click', function(){
-		// call popup with parameters to fill out
-		var parameters = {'session_key': $('#sessionID').html(), 'action':'flush_db'};
-		swampdragon.callRouter('matchmaking', 'lobby', parameters, function(context, data){
-			console.log(data);
-			$('#server_updates').prepend("<span class='message'>"+data+"</span>");
-		});
-	});
-	$("#broadcast_games").on('click', function(){
-		// call popup with parameters to fill out
-		var parameters = {};
-		swampdragon.callRouter('broadcast_games', 'lobby', parameters, function(context, data){});
-	});
-	$("#add_vote").on('click', function(){
-		// call popup with parameters to fill out
-		var myVote = prompt("enter p_id", "xxx-xxx-xxx");
-		var parameters = {'vote':myVote};
-		if (parameters.vote != '')
-			swampdragon.callRouter('vote', 'lobby', parameters, function(context, data){});
-	});
-	$("#test_game").on("click", function(){
-		var player_count = prompt("enter number of players (this should match the server side hardcoded limit)", 4);
-		var parameters = {};
-		parameters['session_key'] = session_key;
-		parameters['player_count'] = player_count;
-		parameters['action'] = "test_game";
-		swampdragon.callRouter('developer', 'lobby', parameters, function(context, data){alert("done");});
-	});
-	$("#ask_update").on("click", function(){
-		var parameters = {};
-		parameters['session_key'] = session_key;
-		parameters['action'] = "ask_update";
-		swampdragon.callRouter('developer', 'lobby', parameters, function(context, data){console.log(data);});
-	});
-	$("#gain_info").on("click", function(){
-		var parameters = {};
-		parameters['attribute_filter'] = prompt("enter comma separated attributes to gain info on player 2 in the session's game", "state");
-		parameters['session_key'] = session_key;
-		parameters['action'] = "gain_info";
-		swampdragon.callRouter('developer', 'lobby', parameters, function(context, data){console.log(data);});
-	});
-	$("#lose_info").on("click", function(){
-		var parameters = {};
-		parameters['attribute_filter'] = prompt("enter comma separated attributes to gain info on player 2 in the session's game", "state");
-		parameters['session_key'] = session_key;
-		parameters['action'] = "lose_info";
-		swampdragon.callRouter('developer', 'lobby', parameters, function(context, data){console.log(data);});
-	});
-});
 
 $("#chatbox_target_list").change(function(){
 	$("#chatbox_target").html($("#chatbox_target_list").val());
