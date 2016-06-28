@@ -74,6 +74,15 @@ class LobbyRouter(BaseRouter):
             full_json = myGame.as_JSON()
             filtered_json = myGame.filter_JSON(full_json, myPlayer.knows_about)
 
+            games_dict = {}
+            data_dict = {}
+            games_dict["json"] = filtered_json
+
+            data_dict["game"] = games_dict
+            data_dict["channel"] = "game:"+myGame.g_id
+
+            publish_data("game:"+myGame.g_id, data_dict)
+
             self.send(filtered_json)
 
         elif kwargs['action'] == "gain_info":
