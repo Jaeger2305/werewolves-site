@@ -31,7 +31,7 @@
     <Content Include="templates\index.html" />
     <Content Include="templates\lobby.html" />
     <Content Include="werewolves_game\readme.txt" />
-    <Content Include="snippets.xml" />
+    <Content Include="js_snippets.xml" />
     <Content Include="werewolves_game\static\werewolves_game\app.js" />
     <Content Include="werewolves_game\static\werewolves_game\controllers.js" />
     <Content Include="werewolves_game\static\werewolves_game\images\BG.jpg" />

@@ -18,7 +18,16 @@ swampdragon.ready(function () {
     console.log("subscribed");
 
     swampdragon.callRouter('init', 'lobby', { 'session_key': session_key }, function (context, data) {
-        console.log("message pushed locally: " + data);
+        if ('activeGame' in data) {
+            gameManager.activeGame = data['activeGame']
+            console.log("Found and stored the active game: " + data['activeGame'])
+        }
+        if ('error' in data) {
+            console.log("There was an error! " + data['error']);
+        }
+        if ('message' in data) {
+            console.log("Message returned from router: " + data['message']);
+        }
     });
 
     $("#quick_match").on('click', function () {
@@ -78,6 +87,12 @@ swampdragon.ready(function () {
         var parameters = {};
         parameters['session_key'] = session_key;
         parameters['action'] = "ask_update";
+        swampdragon.callRouter('developer', 'lobby', parameters, function (context, data) { console.log(data); });
+    });
+    $("#ask_shallow_update").on("click", function () {
+        var parameters = {};
+        parameters['session_key'] = session_key;
+        parameters['action'] = "ask_shallow_update_on_all_games";
         swampdragon.callRouter('developer', 'lobby', parameters, function (context, data) { console.log(data); });
     });
     $("#gain_info").on("click", function () {

@@ -27,17 +27,19 @@ swampdragon.onChannelMessage(function (channels, message) {
         // if game:g_id:event
         // else if game:g_id:player
         // else update all
-        var game_json = JSON.parse(message.data.game.json);
-        console.log("game_json:");
-        console.log(game_json);
-        game = game_manager.find(game_json.g_id);
-        if (game)
-            game.update(game_json);
-        else {
-            var newGame = new Game(game_json);
-            game_manager.add_game(newGame);
+        for (game in message.data.games) {
+            var game_json = JSON.parse(message.data.games[game]);
+            console.log("game_json:");
+            console.log(game_json);
+            javascriptGame = gameManager.find(game_json.g_id);
+            if (javascriptGame)
+                javascriptGame.update(game_json);
+            else {
+                var newGame = new Game(game_json);
+                gameManager.add_game(newGame);
+            }
         }
-        game_manager.display();
+        gameManager.display();
     }
     if (message.data.type == "message") {
         myPlayer.receive_message(message.data.message, message.data.sender, message.data.target, message.data.time);

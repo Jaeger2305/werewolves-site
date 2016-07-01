@@ -16,6 +16,7 @@ import redis
 import uuid
 import json
 import inspect
+import logging
 from random import shuffle
 from math import ceil
 
@@ -35,8 +36,100 @@ from django.conf import settings
 SessionStore = import_module(settings.SESSION_ENGINE).SessionStore
 
 # create an object pool to draw from https://gist.github.com/pazdera/1124839
-class GamePool:
-    pass
+class GameManager:
+    '''A collection of functions for manipulating multiple classes'''
+
+    @staticmethod
+    def publish_all_games():
+        '''Finds all the games currently in redis and returns a JSON of their basic information'''
+        data_dict = {}
+        games_dict = {}
+        all_redis_games = ww_redis_db.hgetall("g_list:*")
+
+                                                            ############################################################
+                                                            # Get all games from redis as a JSON
+                                                            ############################################################
+        if len(all_redis_games) > 0:
+            for redis_game_key in all_redis_games:
+                g_id = str(redis_game_key.decode("utf-8")).split(":")[1]
+                python_game = Game(g_id)
+                
+                games_dict["game:"+g_id] = python_game.as_JSON()
+        else:
+            log_handler.log(
+                log_type        = "INFO",
+                log_code        = "CurrentDev",
+                log_message     = "No games were found in Redis",
+                log_detail      = 5
+            )
+                                                            ############################################################
+                                                            # Publish information
+                                                            ############################################################
+        data_dict["games"] = games_dict
+        data_dict["channel"] = "lobbyinfo"
+
+        publish_data("lobbyinfo", data_dict)
+        return data_dict
+
+
+    @staticmethod
+    def publish_detailed_game(g_id, p_id=None):
+        '''Finds the specified game and creates a detailed JSON, optionally filtering for a specific player'''
+        data_dict = {}                          # the entire dict to publish
+        games_dict = {}                         # the dict containing a single record of the game as a JSON string. Kept as a dict to maintain compatibility with other games_dict parsers
+        publish_channel = "game:" + g_id        # default publishing to everyone subscribed to the game
+        information_channel = publish_channel   # information will always be a game
+
+                                                            ############################################################
+                                                            # Get detailed game as a JSON
+                                                            ############################################################
+        try:
+            redis_game = ww_redis_db.hgetall("g_list:"+g_id)
+
+            if p_id:
+                requesting_player = user.Player(p_id)
+                publish_channel = "player:" + p_id  # publish only to the requesting player
+
+            if len(redis_game) > 0:
+                #g_id is valid
+                python_game = Game(g_id)
+                full_json = python_game.as_JSON()
+                if p_id:
+                    filtered_json = python_game.filter_JSON(full_json, requesting_player.knows_about)
+                    games_dict["game:"+g_id] = filtered_json
+                else:
+                    games_dict["game:"+g_id] = full_json
+            else:
+                log_handler.log(
+                    log_type        = "ERROR",
+                    log_code        = "CurrentDev",
+                    log_message     = "No games were found!",
+                    log_detail      = 3,
+                    context_id      = g_id
+                )
+                raise ValueError("There are no games in redis")
+                                                            ############################################################
+                                                            # Publish information
+                                                            ############################################################
+            data_dict["games"] = games_dict
+            data_dict["channel"] = information_channel
+
+            publish_data(publish_channel, data_dict)
+
+            return data_dict
+
+                                                            ############################################################
+                                                            # Dismiss the error and log.
+                                                            ############################################################
+        except:
+            logging.exception('')
+            log_handler.log(
+                log_type        = "ERROR",
+                log_code        = "CurrentDev",
+                log_message     = "Could not publish this detailed game",
+                log_detail      = 3,
+                context_id      = g_id
+            )
 
 class Game:
     # redundant? Or could be complementary to just instantiating from redis
@@ -44,7 +137,6 @@ class Game:
     def check_exists(cls, g_id):
         # check GamePool Singleton to see if this game already exists, otherwise recycle an object if pool is full, or create new
         raise NotImplementedError
-
 
     def __init__(self, g_id=None, session_key=None, name="myRoom", options=None):
         self.options = {	'max_players': 4,
