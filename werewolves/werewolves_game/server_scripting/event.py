@@ -295,6 +295,13 @@ class Event():
 
         if self.result_subjects and (self.instigators or self.action_without_instigators):		# only add to history if there is an effect
             parent_game.archive_event(self.e_id)
+            log_handler.log(
+                log_type        = "INFO",
+                log_code        = "Event",
+                log_message     = "Event has been archived",
+                log_detail      = 3,
+                context_id      = self.e_id
+            )
         else:
             parent_game.delete_event("event_queue", self.e_id)
 

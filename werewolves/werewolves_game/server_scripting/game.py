@@ -158,7 +158,7 @@ class Game:
 
         try:
             self.load(g_id)
-        except Exception as error:
+        except ValueError as error:
             log_handler.log(
                 log_type        = "ERROR",
                 log_code        = "Game",
@@ -325,13 +325,13 @@ class Game:
                                                             # Validate game exists
                                                             ############################################################
         if g_id is None:
-            raise Exception("No g_id supplied")
+            raise ValueError("No g_id supplied")
 
         redis_game = ww_redis_db.hgetall("g_list:"+str(g_id))
         redis_game = {k.decode('utf8'): v.decode('utf8') for k, v in redis_game.items()}
 
         if not redis_game:
-            raise Exception("g_list:"+str(g_id)+" was not found in redis")
+            raise ValueError("g_list:"+str(g_id)+" was not found in redis")
 
                                                             ############################################################
                                                             # Static variables
@@ -362,14 +362,14 @@ class Game:
             event_ids = redis_game['event_history'].split("|")
             for e_id in event_ids:
                 if e_id not in self.event_history:
-                    self.event_history.append(e_id) # should this use self.archive_event()?
+                    self.event_history.append(e_id) # doesn't use accessor functions as they might trigger other operations (such as a premature save)
 
         self.event_queue = []
         if redis_game['event_queue']:
             event_ids = redis_game['event_queue'].split("|")
             for e_id in event_ids:
                 if e_id not in self.event_queue:
-                    self.add_event(e_id)
+                    self.event_queue.append(e_id) # doesn't use accessor functions as they might trigger other operations (such as a premature save)
 
         self.state = redis_game['state']
         self.g_round = int(redis_game['g_round'])
@@ -423,7 +423,7 @@ class Game:
     def filter_JSON(self, game_json, filters):
         players_json = {}
 
-        knows_about = self.get_group(filters.keys())
+        knows_about = self.get_group(list(filters.keys()))
 
         for player in knows_about:
             if player.p_id in filters:
@@ -494,34 +494,85 @@ class Game:
         return event_history
 
     def get_player_ids(self):
-        warnings.warn("redundant function called")
+        log_handler.log(
+            log_type        = "ERROR",
+            log_code        = "Game",
+            log_message     = "Redundant function called",
+            log_detail      = 1,
+            context_id      = self.g_id
+        )
         return self.players
 
     def get_group(self, selectors, expected_count=None):
-        # loop through Player objects and remove those that don't fit the group as an array
-        group_list = self.get_players()
+        """
+            Selectors is a list of lists. Each list should contribute to the overall returned group, and each item within the list is used to filter the selection pool.
+            Filters can be strings, class objects, or uuids.
+        """
+        selection_pool = self.get_players() # get all players in the game
+        group_list = []
 
-        for selector in selectors:
+                                                            ############################################################
+                                                            # Validate parameters
+                                                            ############################################################
+        if len(selectors) == 0:
+            raise ValueError ("No selectors provided for this group call!")
+        if (not isinstance(selectors[0], list)):
+            selectors = [selectors]
+            log_handler.log(
+                log_type        = "INFO",
+                log_code        = "Game",
+                log_message     = "Single selector given, converting to make compatible",
+                log_detail      = 6,
+                context_id      = self.g_id
+            )
+
+                                                            ############################################################
+                                                            # Build up group using the filters
+                                                            ############################################################
+        for filters in selectors:
+            selected_list = self.filter_group(group_list=selection_pool, filters=filters)
+            for player in selected_list:
+                if player not in group_list:
+                    group_list.append(player)
+
+        if expected_count and expected_count != len(group_list):
+            raise AssertionError
+
+        if expected_count == 1:
+            return group_list[0]
+
+        return group_list
+
+    def filter_group(self, group_list, filters, expected_count=None):
+        """
+            Removes players from the group_list that don't match the filters.
+            Returns the filtered group_list
+        """
+        # loop through Player objects and remove those that don't fit the group as an array
+        if not group_list:
+            group_list = self.get_players()
+
+        for filter in filters:
             if not group_list:
                 return group_list
 
             # selecting based on player.state
-            if selector in ("alive", "dead", "dying"):
-                group_list = [player for player in group_list if player.state == selector]
+            if filter in ("alive", "dead", "dying"):
+                group_list = [player for player in group_list if player.state == filter]
 
             # selecting based on last event
-            elif selector == "last_event":
+            elif filter == "last_event":
                 last_event = event.Event.load(self.g_id, self.event_history[0])
                 group_list = [player for player in group_list if player.p_id in last_event.result_subjects]
 
             # selecting based on Class type
-            elif inspect.isclass(selector) and issubclass(selector, Character):
-                group_list = [player for player in group_list if isinstance(player, selector)]
+            elif inspect.isclass(filter) and issubclass(filter, Character):
+                group_list = [player for player in group_list if isinstance(player, filter)]
 
             # selecting based on uuid string
-            elif isinstance(selector, str):
-                if uuid.UUID(selector, version=4):
-                    group_list = [player for player in group_list if player.p_id == selector]
+            elif isinstance(filter, str):
+                if uuid.UUID(filter, version=4):
+                    group_list = [player for player in group_list if player.p_id == filter]
 
                     log_type    = "INFO"
                     log_code    = "Game"
@@ -530,12 +581,6 @@ class Game:
                     context_id  = self.g_id
 
                     log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
-
-        if expected_count and expected_count != len(group_list):
-            raise AssertionError
-
-        if expected_count == 1:
-            return group_list[0]
 
         return group_list
 
@@ -609,7 +654,8 @@ class Game:
         # log game into Relational DB
         
         # remove players from game
-        for p_id in self.players:
+        leaving_players = list(self.players)
+        for p_id in leaving_players:
             self.remove_player(leaving_p_id=p_id)
 
         # delete game from redis
@@ -742,11 +788,32 @@ class Game:
         if old_event_id in self.event_queue:
             self.event_queue.remove(old_event_id)
         else:
+            log_handler.log(
+                log_type        = "ERROR",
+                log_code        = "Game",
+                log_message     = "Tried to archive an event that wasn't found in the queue: "+old_event_id,
+                log_detail      = 3,
+                context_id      = self.g_id
+            )
             warnings.warn("Tried to archive an event that wasn't found in the queue: " + old_event_id)
         
         if old_event_id not in self.event_history:
             self.event_history.append(old_event_id)
-        
+            log_handler.log(
+                log_type        = "INFO",
+                log_code        = "Game",
+                log_message     = "Archived an event successful - " + old_event_id,
+                log_detail      = 5,
+                context_id      = self.g_id
+            )
+        else:
+            log_handler.log(
+                log_type        = "ERROR",
+                log_code        = "Game",
+                log_message     = "That event "+old_event_id+" was already in the event_history",
+                log_detail      = 3,
+                context_id      = self.g_id
+            )
         self.save()
 
     # used to delete an event if there was no effect, for instance if there were no subjects or instigators, or an impossible action was attempted.
@@ -862,6 +929,13 @@ class Game:
         try:
             if leaving_p_id:
                 leaving_player = self.get_group([leaving_p_id], expected_count=1)
+                log_handler.log(
+                    log_type        = "WARNING",
+                    log_code        = "Game",
+                    log_message     = "If iterating through and deleting players, you must shallow copy it first!",
+                    log_detail      = 10,
+                    context_id      = self.g_id
+                )
             else:
                 leaving_p_id = leaving_player.p_id
                 leaving_player = self.get_group([leaving_p_id], expected_count=1)
@@ -901,8 +975,8 @@ class Game:
             context_id      = leaving_p_id
         )
 
-        # if there are no players left, initiate countdown for redis cleanup
-        if len(self.players) == 0:
+        # if there are no players left, initiate countdown for redis cleanup, unless there's already a callback for its deletion
+        if len(self.players) == 0 and not hasattr(self, 'redis_cleanup_callback_reference') or (hasattr(self, 'redis_cleanup_callback_reference') and not self.redis_cleanup_callback_reference):
             callback_handle = IOLoop.current().call_later(10, self.redis_cleanup)  # self works here because the data the cleanup needs should not change
             self.redis_cleanup_callback_reference = callback_handler.add_callback(self.g_id, callback_handle)
 

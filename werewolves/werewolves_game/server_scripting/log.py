@@ -116,8 +116,9 @@ class log():
 log_codes = [
     "Server",
     "RDBMS",
-    "Client",
-    "CurrentDev"
+    "CurrentDev",
+    "Game",
+    "Event"
 ]
 
-log_handler = log(log_codes=log_codes, log_detail=5, log_file="2016-06-18Log.txt", log_all=True)
+log_handler = log(log_codes=log_codes, log_detail=5, log_file="2016-06-18Log.txt")

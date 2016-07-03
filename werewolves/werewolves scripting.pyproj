@@ -35,6 +35,7 @@
     <Content Include="werewolves_game\static\werewolves_game\app.js" />
     <Content Include="werewolves_game\static\werewolves_game\controllers.js" />
     <Content Include="werewolves_game\static\werewolves_game\images\BG.jpg" />
+    <Content Include="werewolves_game\static\werewolves_game\javascript\event.js" />
     <Content Include="werewolves_game\static\werewolves_game\javascript\game.js" />
     <Content Include="werewolves_game\static\werewolves_game\javascript\jquery-1.11.3.js" />
     <Content Include="werewolves_game\static\werewolves_game\javascript\session.js" />

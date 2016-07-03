@@ -115,10 +115,20 @@ Game.prototype.update = function (gameJson) {
 }
 
 Game.prototype.addPlayer = function (playerJson) {
-    player = JSON.parse(playerJson);
+    var player = JSON.parse(playerJson);
     if (player.p_id === activeUser.p_id) {
         gameManager.activeGame = this.g_id;
     }
+}
+
+// work in progress
+Game.prototype.getGroup = function (selectors) {
+    //var groupList = this.players;
+    //for (var selector in selectors) {
+    //    if (selector === "uuid") {
+    //
+    //    }
+    //}
 }
 
 Game.prototype.display = function(){
