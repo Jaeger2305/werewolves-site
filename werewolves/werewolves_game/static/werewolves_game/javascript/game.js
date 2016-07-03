@@ -12,6 +12,9 @@
 *
  ***********************************************************/
 
+/***********************************************************************************************************************
+* GameManager methods
+***********************************************************************************************************************/
 function GameManager(){
     this.games_list = [];
     this.activeGame = "";
@@ -47,59 +50,135 @@ GameManager.prototype.find = function(g_id){
     return false;
 }
 
+GameManager.prototype.makeActiveGame = function(g_id){
+    this.activeGame = g_id;
+}
 
 
-function Game(json, g_id, players, state){
-    if (json !== undefined){
-        if (typeof(json) === "string")		// fails if string created as object, better than nothing
-            json = JSON.parse(json);
+/***********************************************************************************************************************
+* Game methods
+***********************************************************************************************************************/
+function Game(gameJson, g_id, players, state) {
+    if (gameJson !== undefined) {
+        if (typeof (gameJson) === "string")     // fails if string created as object, better than nothing
+            newGame = JSON.parse(gameJson);
+        else {
+            newGame = gameJson      // more appropriate naming
+        }
 
-        g_id = json.g_id;
-        players = json.players;
-        state = json.state;
-        event_queue = json.event_queue;
-        event_history = json.event_history;
+        g_id = newGame.g_id;
+        players = newGame.players;
+        state = newGame.state;
+        event_queue = newGame.event_queue;
+        event_history = newGame.event_history;
     }
 
     this.g_id = g_id;
-    this.players = [];
-    for (var player in players) {
-        player = JSON.parse(players[player]);
-        this.players.push(new Player(
-            player.p_id, 
-            player.name,
-            player.state,
-            player.character)
-        );
-    }
     this.state = state;
+    this.players = [];
+    for (var playerJson in players) {
+        this.players.push(new Player(players[playerJson]));
+    }
+
+    if ($.inArray(activeUser.p_id, gameJson.players)) {
+        gameManager.makeActiveGame(this.g_id)
+    }
 }
 
-Game.prototype.update = function(json){
-    if ('g_id' in json){this.g_id = json.g_id;}
-    if ('state' in json){this.state = json.state;}
+Game.prototype.update = function (gameJson) {
+    if ('g_id' in gameJson) { this.g_id = gameJson.g_id; }
+    if ('state' in gameJson) { this.state = gameJson.state; }
+    if ('g_round' in gameJson) { this.g_round = gameJson.g_round; }
+    if ('witch_enabled' in gameJson) { this.witchEnabled = gameJson.witch_enabled; }
+    if ('mystic_enabled' in gameJson) { this.mysticEnabled = gameJson.mystic_enabled; }
+    if ('players' in gameJson) {
+        this.players = []
+        for (var refresh_player_json in gameJson.players) {
+            this.players.push(new Player(gameJson.players[refresh_player_json]));
+        }
+    }
+    //if ('event_history' in json) {
+    //    this.event_history = []
+    //    for (var refresh_event_history_json in json.event_history) {
+    //        this.event_history.push(new Event(refresh_event_history_json))
+    //    }
+    //}
+    //if ('event_queue' in json) {
+    //    this.event_queue = []
+    //    for (var refresh_event_queue_json in json.event_queue) {
+    //        this.event_queue.push(new Event(refresh_event_queue_json))
+    //    }
+    //}
+    if ($.inArray(activeUser.p_id, gameJson.players)) {
+        gameManager.makeActiveGame(this.g_id)
+    }
+}
+
+Game.prototype.addPlayer = function (playerJson) {
+    player = JSON.parse(playerJson);
+    if (player.p_id === activeUser.p_id) {
+        gameManager.activeGame = this.g_id;
+    }
 }
 
 Game.prototype.display = function(){
     $("#player_list").html("");
     for (var player of this.players){
         console.log(player);
-        $("#player_list").append("<tr><td>"+player.name+"</td></tr>");
+        $("#player_list").append(
+            "<tr>" +
+                "<td>" + player.p_id + "</td>" +
+                "<td>" + player.name + "</td>" +
+                "<td>" + player.state + "</td>" +
+                "<td>" + player.character + "</td>" +
+            "</tr>"
+        );
     }
 }
 
-function Player(p_id, name, state, character){
-    this.p_id = p_id;
-    this.name = name;
-    this.state = state;
-    this.character = character;
+/***********************************************************************************************************************
+* User methods
+***********************************************************************************************************************/
+function User(userJson) {
+    if (typeof (userJson) === "string") {
+        userJson = JSON.parse(userJson)
+    }
+    this.location = userJson.location;
+    this.p_id = userJson.p_id;
+    if ('g_id' in userJson) {
+        this.g_id = userJson.g_id;    // unnecessary/unused?
+    }
+    else {
+        this.g_id = null;
+    }
 }
 
-Player.prototype.update = function(json){
-    if ('p_id' in json){	this.p_id = json.p_id;	}
-    if ('state' in json){	this.state = json.state;	}
+/***********************************************************************************************************************
+* Player methods
+***********************************************************************************************************************/
+function Player(playerJson) {
+    // ensure json is parsed
+    if (typeof (playerJson) === "string") {
+        playerJson = JSON.parse(playerJson)
+    }
+    
+    this.p_id = playerJson.p_id;
+    this.name = playerJson.name;
+    this.state = playerJson.state;
+    this.character = playerJson.character;
 }
 
+Player.prototype.update = function (playerJson) {
+    if ('p_id' in playerJson) { this.p_id = playerJson.p_id; }
+    if ('name' in playerJson) { this.name = playerJson.name; }
+    if ('state' in playerJson) { this.state = playerJson.state; }
+    if ('character' in playerJson) { this.character= playerJson.character; }
+}
+
+
+                                                            /***********************************************************
+                                                            * Message methods
+                                                            ***********************************************************/
 Player.prototype.message = function(msg, targetPID){
     parameters = {"msg":msg, "target":targetPID, "session_key": session_key};
     swampdragon.callRouter('messaging', 'lobby', parameters, function(context, data){
@@ -115,14 +194,20 @@ Player.prototype.receive_message = function(msg, sender, target, time){
 }
 
 
-gameManager = new GameManager();
 
-myPlayer = new Player();
+/***********************************************************************************************************************
+* Global variables
+***********************************************************************************************************************/
+var gameManager = new GameManager();
+
+var activeUser; // initialised in swampdragon init router call
 
 var selected_players = [];
 
 
-// plugins
+/***********************************************************************************************************************
+* Plugins and snippets
+***********************************************************************************************************************/
 // credit to adamb http://stackoverflow.com/a/13866517/2276412
 // makes a span editable on double click
 $.fn.extend({

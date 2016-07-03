@@ -121,6 +121,15 @@ class User:
         if not attribute_filter or 'name' in attribute_filter:
             user_json['name'] = self.name
 
+        if not attribute_filter or 'location' in attribute_filter:
+            user_json['location'] = self.location
+
+        if not attribute_filter or 'name' in attribute_filter:
+            user_json['name'] = self.name
+
+        if not attribute_filter or 'g_history' in attribute_filter:
+            user_json['g_history'] = [self.g_history]
+
         return json.dumps(user_json, default=lambda o: o.__dict__, sort_keys=True, indent=4)
 
     def is_ingame(self):

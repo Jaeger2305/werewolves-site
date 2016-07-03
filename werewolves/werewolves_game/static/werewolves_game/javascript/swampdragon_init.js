@@ -22,6 +22,9 @@ swampdragon.ready(function () {
             gameManager.activeGame = data['activeGame']
             console.log("Found and stored the active game: " + data['activeGame'])
         }
+        if ('userJson' in data) {
+            activeUser = new User(data['userJson'])
+        }
         if ('error' in data) {
             console.log("There was an error! " + data['error']);
         }

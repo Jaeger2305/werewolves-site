@@ -44,7 +44,7 @@ class GameManager:
         '''Finds all the games currently in redis and returns a JSON of their basic information'''
         data_dict = {}
         games_dict = {}
-        all_redis_games = ww_redis_db.hgetall("g_list:*")
+        all_redis_games = ww_redis_db.keys("g_list:*")
 
                                                             ############################################################
                                                             # Get all games from redis as a JSON
@@ -66,7 +66,7 @@ class GameManager:
                                                             # Publish information
                                                             ############################################################
         data_dict["games"] = games_dict
-        data_dict["channel"] = "lobbyinfo"
+        data_dict["channel"] = "games_list"
 
         publish_data("lobbyinfo", data_dict)
         return data_dict
@@ -93,7 +93,7 @@ class GameManager:
             if len(redis_game) > 0:
                 #g_id is valid
                 python_game = Game(g_id)
-                full_json = python_game.as_JSON()
+                full_json = python_game.as_JSON(meta=True, players=True, cur_events=True, hist_events=True)
                 if p_id:
                     filtered_json = python_game.filter_JSON(full_json, requesting_player.knows_about)
                     games_dict["game:"+g_id] = filtered_json

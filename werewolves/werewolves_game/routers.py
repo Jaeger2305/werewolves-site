@@ -57,9 +57,10 @@ class LobbyRouter(BaseRouter):
         response['message'] = "attempting to initiatilise player"
 
         if "session_key" in kwargs:
-            initUser = User(session_key=str(kwargs['session_key']))     # this ensures the user's session is stored with the p_id in redis, allowing subsequent calls to redis to require only the p_id
-            if(initUser.location == "ingame"):
-                response['activeGame'] = initUser.session['g_id']
+            init_user = User(session_key=str(kwargs['session_key']))     # this ensures the user's session is stored with the p_id in redis, allowing subsequent calls to redis to require only the p_id
+            if(init_user.location == "ingame"):
+                response['activeGame'] = init_user.session['g_id']
+            response['userJson'] = init_user.as_JSON()
             response['message'] = "initialised user into Redis"
         else:
             response['error'] = "no session key supplied"
@@ -87,14 +88,9 @@ class LobbyRouter(BaseRouter):
         elif kwargs['action'] == "ask_shallow_update_on_all_games": # call out to Game Manager shallow update
             games_dict = {}
             data_dict = {}
-            games_dict["json"] = filtered_json
+            publish_dict = GameManager.publish_all_games()
 
-            data_dict["game"] = games_dict
-            data_dict["channel"] = "game:"+myGame.g_id
-
-            publish_data("game:"+myGame.g_id, data_dict)
-
-            self.send(filtered_json)
+            self.send(publish_dict)
 
         elif kwargs['action'] == "gain_info":
             if 'attribute_filter' in kwargs:
