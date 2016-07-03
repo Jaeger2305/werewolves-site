@@ -132,21 +132,24 @@ class GameManager:
             )
 
 class Game:
+    default_config = {
+        'name':'myRoom',
+        'max_players': 4,
+        'mystic_enabled': False,
+        'witch_enabled': False
+    }
     # redundant? Or could be complementary to just instantiating from redis
     @classmethod
     def check_exists(cls, g_id):
         # check GamePool Singleton to see if this game already exists, otherwise recycle an object if pool is full, or create new
         raise NotImplementedError
 
-    def __init__(self, g_id=None, session_key=None, name="myRoom", options=None):
-        self.options = {	'max_players': 4,
-                            'mystic': False,
-                            'witch': False	}
-        
-        self.state = ""             # used to track the current operation or state of the game
-        self.players = []	        # list of Players
-        self.event_queue = []	    # events waiting to happen. Triggered based on Game.state
-        self.event_history = []	    # past events
+    def __init__(self, g_id=None, session_key=None, config={}):
+        self.state = ""                     # used to track the current operation or state of the game
+        self.players = []	                # list of Players
+        self.event_queue = []	            # events waiting to happen. Triggered based on Game.state
+        self.event_history = []	            # past events
+        self.config = Game.default_config   # default inputs potentitally contributed to by a player
 
         if g_id is None and session_key is not None:
             session_data = SessionStore(session_key=session_key)
@@ -156,29 +159,118 @@ class Game:
         try:
             self.load(g_id)
         except Exception as error:
-            log_type    = "ERROR"
-            log_code    = "Game"
-            log_message = str(error) + ": Creating default game values"
-            log_detail  = 4
-            context_id  = g_id
-
-            log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
-
+            log_handler.log(
+                log_type        = "ERROR",
+                log_code        = "Game",
+                log_message     = "Creating default game values because: " + str(error),
+                log_detail      = 4,
+                context_id      = g_id
+            )
+            ############################################################################################################
+            # Default variables
+            ############################################################################################################
             self.g_id = str(uuid.uuid4())
             self.g_round = 0
-            self.name = name
-            self.state = "matchmaking"	# default. Currently unused
+            self.state = "matchmaking"
 
-        self.saved = False		    # enables chain editing
-        self.iol = IOLoop.current()	# main tornado loop uses for callbacks
+            ############################################################################################################
+            # Verify config
+            ############################################################################################################
+            if config:
+                try:
+                                                                ########################################################
+                                                                # Convert from string data types
+                                                                ########################################################
+                    if 'max_players' in config and config['max_players']:
+                        config['max_players'] = int(config['max_players'])
 
-        log_type    = "INFO"
-        log_code    = "Memory"
-        log_message = "Game initialised"
-        log_detail  = 4
-        context_id  = self.g_id
+                    if 'witch_enabled' in config and config['witch_enabled']:
+                        config['witch_enabled'] = {"true": True, "false": False}.get(config['witch_enabled'].lower())
 
-        log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
+                    if 'mystic_enabled' in config and config['mystic_enabled']:
+                        config['mystic_enabled'] = {"true": True, "false": False}.get(config['mystic_enabled'].lower())
+
+                                                                ########################################################
+                                                                # Validate/repair contents
+                                                                ########################################################
+                    validated_config = dict(config)
+                    invalid_configs = {}
+                    for key, value in config.items():
+                        if key not in self.config or value == None:
+                            invalid_configs[key] = value
+                            del validated_config[key]
+
+                    if invalid_configs:
+                        raise ContinueError("Some parameters were changed", error_dict=invalid_configs)
+
+                                                                ########################################################
+                                                                # Error handling game config
+                                                                ########################################################
+                except ValueError as e:
+                    validated_config = {}
+                    log_handler.log(
+                        log_type        = "ERROR",
+                        log_code        = "Client",
+                        log_message     = "Could not create game config dict, using default: " + str(e),
+                        log_detail      = 3
+                    )
+                except ContinueError as e:
+                    log_handler.log(
+                        log_type        = "ERROR",
+                        log_code        = "Client",
+                        log_message     = "Repaired or removed errors: " + str(e) +" "+str(e.error_dict.items()),
+                        log_detail      = 3
+                    )
+
+                                                                ########################################################
+                                                                # Update config
+                                                                ########################################################
+                for key, value in validated_config.items():
+                    if key in self.config:
+                        self.config[key] = value
+                        log_handler.log(
+                            log_type        = "INFO",
+                            log_code        = "Game",
+                            log_message     = "Added (key)"+key+" to game as (value)"+str(value),
+                            log_detail      = 8
+                        )
+                    else:
+                        log_handler.log(
+                            log_type        = "ERROR",
+                            log_code        = "Game",
+                            log_message     = "Invalid configuration for the game: " + str(config.items()),
+                            log_detail      = 3
+                        )
+                        raise ValueError("Invalid configuration for the game")  # shouldn't ever error as it should've been cleared up earlier
+
+            log_handler.log(
+                log_type        = "INFO",
+                log_code        = "Game",
+                log_message     = "Loaded game config: "+str(self.config.items()),
+                log_detail      = 5,
+            )
+
+                                                            ############################################################
+                                                            # Apply config
+                                                            ############################################################
+            self.name = self.config['name']
+            self.max_players = self.config['max_players']
+            self.witch_enabled = self.config['witch_enabled']
+            self.mystic_enabled = self.config['mystic_enabled']
+
+        ################################################################################################################
+        # Variables independent of redis and defaults
+        ################################################################################################################
+        self.saved = False          # enables chain editing - redundant?
+        self.iol = IOLoop.current()	# main tornado loop uses for callbacks. SHOULD NOT BE USED!
+
+        log_handler.log(
+            log_type        = "INFO",
+            log_code        = "Memory",
+            log_message     = "Game initialised",
+            log_detail      = 4,
+            context_id      = self.g_id
+        )
 
     def __eq__(self, other):
         return self.g_id == other.g_id
@@ -187,7 +279,10 @@ class Game:
         ww_redis_db.hset("g_list:"+self.g_id, "name", self.name)
         ww_redis_db.hset("g_list:"+self.g_id, "g_round", self.g_round)
         ww_redis_db.hset("g_list:"+self.g_id, "state", self.state)
-        
+        ww_redis_db.hset("g_list:"+self.g_id, "max_players", str(self.max_players))
+        ww_redis_db.hset("g_list:"+self.g_id, "witch_enabled", str(self.witch_enabled))
+        ww_redis_db.hset("g_list:"+self.g_id, "mystic_enabled", str(self.mystic_enabled))
+
         players_string = cur_events_string = old_events_string = ""
         if self.players:
             players_string = "|".join(self.players)
@@ -226,6 +321,9 @@ class Game:
         log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
 
     def load(self, g_id):
+                                                            ############################################################
+                                                            # Validate game exists
+                                                            ############################################################
         if g_id is None:
             raise Exception("No g_id supplied")
 
@@ -235,13 +333,22 @@ class Game:
         if not redis_game:
             raise Exception("g_list:"+str(g_id)+" was not found in redis")
 
+                                                            ############################################################
+                                                            # Static variables
+                                                            ############################################################
         self.g_id = g_id
+
+                                                            ############################################################
+                                                            # Config determined variables
+                                                            ############################################################
         self.name = redis_game['name']
-        self.g_round = int(redis_game['g_round'])
+        self.max_players = int(redis_game['max_players'])
+        self.witch_enabled =  {"true": True, "false": False}.get(redis_game['witch_enabled'].lower())
+        self.mystic_enabled =  {"true": True, "false": False}.get(redis_game['mystic_enabled'].lower())
 
-        # static method of redis_class split a "|" separated string and return initialised versions of each id
-        # needs refactoring somehow
-
+                                                            ############################################################
+                                                            # Dynamic variables
+                                                            ############################################################
         if redis_game['players']:
             player_ids = redis_game['players'].split('|')
             for p_id in player_ids:
@@ -265,6 +372,7 @@ class Game:
                     self.add_event(e_id)
 
         self.state = redis_game['state']
+        self.g_round = int(redis_game['g_round'])
 
         if 'redis_cleanup_callback_reference' in redis_game:
             self.redis_cleanup_callback_reference = redis_game['redis_cleanup_callback_reference']
@@ -281,6 +389,9 @@ class Game:
             game_obj['g_id'] = self.g_id
             game_obj['name'] = self.name
             game_obj['g_round'] = self.g_round
+            game_obj['max_players'] = self.max_players
+            game_obj['witch_enabled'] = self.witch_enabled
+            game_obj['mystic_enabled'] = self.mystic_enabled
 
 
         # if asked for
@@ -386,7 +497,7 @@ class Game:
         warnings.warn("redundant function called")
         return self.players
 
-    def get_group(self, selectors):
+    def get_group(self, selectors, expected_count=None):
         # loop through Player objects and remove those that don't fit the group as an array
         group_list = self.get_players()
 
@@ -410,7 +521,7 @@ class Game:
             # selecting based on uuid string
             elif isinstance(selector, str):
                 if uuid.UUID(selector, version=4):
-                    group_list = [player for player in group_list if player.p_id in self.players]
+                    group_list = [player for player in group_list if player.p_id == selector]
 
                     log_type    = "INFO"
                     log_code    = "Game"
@@ -420,6 +531,12 @@ class Game:
 
                     log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
 
+        if expected_count and expected_count != len(group_list):
+            raise AssertionError
+
+        if expected_count == 1:
+            return group_list[0]
+
         return group_list
 
     def assign_roles(self):
@@ -427,10 +544,10 @@ class Game:
 
         temp_characters = []
 
-        werewolves_count = ceil(0.3*self.options['max_players'])
+        werewolves_count = ceil(0.3*self.config['max_players'])
 
-        if self.options['witch']:
-            witch_count = ceil(0.1*self.options['max_players'])
+        if self.config['witch_enabled']:
+            witch_count = ceil(0.1*self.config['max_players'])
         else:
             witch_count = 0
 
@@ -661,7 +778,31 @@ class Game:
         return winners
 
     def add_player(self, joining_p_id=None, joining_player=None):
-        # if redis game cleanup was initated but a new player has joined, remove the cleanup callback
+                                                            ############################################################
+                                                            # Initialise player object
+                                                            ############################################################
+        if joining_p_id:
+            joining_player = user.Player(p_id=joining_p_id)
+        elif joining_player:
+            joining_p_id = joining_player.p_id
+        else:
+            raise ValueError
+                                                            ############################################################
+                                                            # Return immediately if the player is already in a game
+                                                            ############################################################
+        if joining_player.is_ingame():
+            log_handler.log(
+                log_type        = "ERROR.",
+                log_code        = "Player",
+                log_message     = "Player: " + joining_player.p_id + "is already in a game: "+ joining_player.g_id,
+                log_detail      = 4,
+                context_id      = self.g_id
+            )
+            return
+                                                            ############################################################
+                                                            # If game was empty and has been scheduled for cleanup,
+                                                            # remove the cleanup callback
+                                                            ############################################################
         if hasattr(self, 'redis_cleanup_callback_reference') and self.redis_cleanup_callback_reference:
             callback_handler.remove_callback(self.g_id, self.redis_cleanup_callback_reference)
             self.redis_cleanup_callback_reference = None
@@ -673,17 +814,13 @@ class Game:
                 context_id      = self.g_id
             )
 
-        if joining_p_id:
-            joining_player = user.Player(p_id=joining_p_id)
-        elif joining_player:
-            joining_p_id = joining_player.p_id
-        else:
-            raise ValueError
         if joining_p_id not in self.players:
             self.players.append(joining_p_id)
             self.save() # all changes to the game must be immediately saved! otherwise due to call stacks, this would overwrite the new changes. You could pass by reference, but probably better to call load from redis again
 
-            # share around generic information
+                                                            ############################################################
+                                                            # Update known information for all players in the game
+                                                            ############################################################
             for ingame_player in self.get_players():
                 if joining_player != ingame_player:
                     # give ingame player information about joining player
@@ -692,26 +829,29 @@ class Game:
                     # give joining player information about ingame_players
                     joining_player.gain_info(['p_id', 'name'], info_player=ingame_player)
 
-        joining_player.session['location'] = "ingame"
-        joining_player.session['g_id'] = self.g_id
-        joining_player.save()
+                                                            ############################################################
+                                                            # Save changes for player
+                                                            ############################################################
+        joining_player.join_game(self.g_id)
 
-        log_type    = "INFO"
-        log_code    = "Game"
-        log_message = "Player (" + joining_p_id + ") has been added to the game"
-        log_detail  = 5
-        context_id  = self.g_id
-
-        log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
-
-        if len(self.players) >= self.options['max_players']:
-            log_type    = "INFO"
-            log_code    = "Game"
-            log_message = "Game full, starting now."
-            log_detail  = 2
-            context_id  = self.g_id
-
-            log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
+        log_handler.log(
+            log_type        = "INFO",
+            log_code        = "Game",
+            log_message     = "Player ("+joining_p_id+") has been added to the game",
+            log_detail      = 5,
+            context_id      = self.g_id
+        )
+                                                            ############################################################
+                                                            # Check game if game is full, if so begin
+                                                            ############################################################
+        if len(self.players) >= self.config['max_players']:
+            log_handler.log(
+                log_type        = "INFO",
+                log_code        = "Game",
+                log_message     = "Game full, starting now",
+                log_detail      = 2,
+                context_id      = self.g_id
+            )
 
             self.change_state("ready", "starting game in 3 secs")
             IOLoop.current().call_later(3, self.start_game)     # for production/give a delay
@@ -719,19 +859,21 @@ class Game:
         self.save()
 
     def remove_player(self, leaving_p_id=None, leaving_player=None):
-        if leaving_p_id:
-            leaving_player = self.get_group([leaving_p_id])[0]
-        else:
-            leaving_p_id = leaving_player.p_id
-            leaving_player = self.get_group([leaving_p_id])[0]
-
-        if not leaving_player:
-            warnings.warn("Leaving player not found in game: "+leaving_p_id)
-            traceback.print_exc()
+        try:
+            if leaving_p_id:
+                leaving_player = self.get_group([leaving_p_id], expected_count=1)
+            else:
+                leaving_p_id = leaving_player.p_id
+                leaving_player = self.get_group([leaving_p_id], expected_count=1)
+        except AssertionError:
+            log_handler.log(
+                log_type        = "ERROR",
+                log_code        = "Game",
+                log_message     = "Couldn't find exactly one player with p_id "+leaving_p_id+" in this game",
+                log_detail      = 3,
+                context_id      = self.g_id
+            )
             return
-
-        leaving_player.session['location'] = "outgame"
-        leaving_player.save()
 
         for ingame_player in self.get_players():
             if leaving_player != ingame_player:
@@ -741,20 +883,23 @@ class Game:
         while leaving_p_id in self.players:
             self.players.remove(leaving_p_id)
 
-        log_type    = "INFO"
-        log_code    = "Game"
-        log_message = "Player ("+leaving_p_id+") has beem removed from this game"
-        log_detail  = 5
-        context_id  = self.g_id
+        leaving_player.leave_game()
 
-        log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
+        log_handler.log(
+            log_type        = "INFO",
+            log_code        = "Game",
+            log_message     = "Player ("+leaving_p_id+") has beem removed from this game",
+            log_detail      = 5,
+            context_id      = self.g_id
+        )
 
-        log_code    = "Player"
-        log_message = "This player has left the game ("+self.g_id+")"
-        log_detail  = 4
-        context_id  = leaving_p_id
-
-        log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
+        log_handler.log(
+            log_type        = "INFO",
+            log_code        = "Player",
+            log_message     = "This player has left the game ("+self.g_id+")",
+            log_detail      = 4,
+            context_id      = leaving_p_id
+        )
 
         # if there are no players left, initiate countdown for redis cleanup
         if len(self.players) == 0:

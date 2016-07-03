@@ -9,6 +9,7 @@ from swampdragon.route_handler import ModelPubRouter, BaseRouter
 from werewolves_game.server_scripting.game import *     # bad practice
 from werewolves_game.server_scripting.user import Player, User
 from werewolves_game.server_scripting.redis_util import *
+from werewolves_game.server_scripting.custom_errors import ContinueError
 
 class GameRouter(BaseRouter):
     route_name = 'game'
@@ -79,15 +80,11 @@ class LobbyRouter(BaseRouter):
             myGame = Game(session_key=kwargs['session_key'])
 
             publish_dict = GameManager.publish_detailed_game(g_id=myGame.g_id, p_id=myPlayer.p_id)
+            #filtered_json = myGame.filter_JSON(full_json, myPlayer.knows_about) # include this somehow?
 
             self.send(publish_dict)
 
-        elif kwargs['action'] == "ask_shallow_update_on_all_games":
-            
-
-            full_json = myGame.as_JSON()
-            filtered_json = myGame.filter_JSON(full_json, myPlayer.knows_about)
-
+        elif kwargs['action'] == "ask_shallow_update_on_all_games": # call out to Game Manager shallow update
             games_dict = {}
             data_dict = {}
             games_dict["json"] = filtered_json
@@ -141,6 +138,7 @@ class LobbyRouter(BaseRouter):
             return
 
     def matchmaking(self, **kwargs):
+        response = {}   # an object used to return information to the client directly.
         if 'action' not in kwargs:
             return self.send({"error":"no action given"})
 
@@ -152,18 +150,101 @@ class LobbyRouter(BaseRouter):
             self.send("flushed!")
             return
 
+                                                            ############################################################
+                                                            # Initialise player
+                                                            ############################################################
         if "p_id" in session_data:
             player = Player(session_data['p_id'])
         else:
             print("error: p_id not been assigned to session")
             raise TypeError
 
+                                                            ############################################################
+                                                            # Join game
+                                                            ############################################################
         if kwargs['action'] == "join_game":
-            response = player.find_game(**kwargs)
+            response = player.find_game(**kwargs)   # this should really be done throug the game manager
+
+                                                            ############################################################
+                                                            # Leave game
+                                                            ############################################################
         elif kwargs['action'] == "leave_game":
-            response = player.leave_game(**kwargs)
+            try:
+                if 'g_id' in kwargs:
+                    player_game = Game(kwargs['g_id'])
+                elif hasattr(player, "g_id"):
+                    player_game = Game(player.g_id)
+                elif 'g_id' in self.session:
+                    player_game = Game(player.session['g_id'])
+                    log_handler.log(
+                        log_type    = "INFO",
+                        log_code    = "Player",
+                        log_message = "g_id was passed via session and not via kwargs",
+                        log_detail  = 7,
+                        context_id  = player.p_id
+                    )
+                elif not player.is_ingame():
+                    response['error'] = "Player not currently in a game."
+                    log_handler.log(
+                        log_type    = "ERROR",
+                        log_code    = "Player",
+                        log_message = "This player tried to leave their game when they weren't in any game",
+                        log_detail  = 3,
+                        context_id  = player.p_id
+                    )
+                    raise ValueError ("Player not current in a game")
+                else:
+                    response['error'] = "Game not found"
+                    log_handler.log(
+                        log_type    = "ERROR",
+                        log_code    = "Player",
+                        log_message = "No game could be found that is associate with this player",
+                        log_detail  = 3,
+                        context_id  = player.p_id
+                    )
+                    raise ValueError ("Game not found")
+
+                if player.p_id in player_game.players:
+                    player_game.remove_player(leaving_player=player)
+
+                    response['response'] = "Player removed from game"
+                else:
+                    response['error'] = "Player not found in game: "+player_game.g_id
+                    log_handler.log(
+                        log_type        = "ERROR",
+                        log_code        = "Player",
+                        log_message     = "Could not find this player in the game "+player_game.g_id,
+                        log_detail      = 4,
+                        context_id      = player.p_id
+                    )
+            except ValueError:
+                log_handler.log(
+                    log_type        = "ERROR",
+                    log_code        = "Player",
+                    log_message     = "Could not find this player in the game "+player_game.g_id,
+                    log_detail      = 4,
+                    context_id      = player.p_id
+                )
+
+                                                            ############################################################
+                                                            # Create game
+                                                            ############################################################
+        elif kwargs['action'] == "create_game":
+            user_config = {}
+            if 'config' in kwargs:
+                user_config = kwargs['config']
+
+            newGame = Game(config=user_config)
+
+            if player.is_ingame():
+                Game(player.g_id).remove_player(player.p_id)
+
+            response = newGame.add_player(player.p_id)
 
 
+                                                            ############################################################
+                                                            # Send response to client
+                                                            ############################################################
         self.send(response)
 
     def messaging(self,**kwargs):

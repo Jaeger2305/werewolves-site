@@ -38,6 +38,25 @@ swampdragon.ready(function () {
         });
     });
 
+    $("#create_game").on('click', function () {
+        var witchEnabled = prompt("Is the witch enabled?", "False");
+        var mysticEnabled = prompt("Is the mystic enabled?", "False");
+        var gameName = prompt("What do you want to call the game?", "Richard's room");
+        var maxPlayers = prompt("How many total players should there be in this game?", "4");
+
+        var config = {
+            "witch_enabled": witchEnabled,
+            "name": gameName,
+            "max_players": maxPlayers
+        }
+
+        swampdragon.callRouter('matchmaking', 'lobby', { 'session_key': $('#sessionID').html(), 'action': 'create_game', 'config': config }, function (context, data) {
+            swampdragon.subscribe('lobby', 'misc', { 'session_key': $('#sessionID').html() }, null, null);
+            console.log(data);
+            $('#server_updates').prepend("<span class='message'>" + data.text + ": " + data.g_id + "</span>");
+        });
+    });
+
     $("#leave_match").on('click', function () {
         // call popup with parameters to fill out
         var parameters = { 'session_key': $('#sessionID').html(), 'action': 'leave_game' };

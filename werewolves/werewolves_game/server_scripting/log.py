@@ -20,7 +20,7 @@ class log():
     csv_delimiter = "|"
     newline = "\n"
 
-    csv_headers = csv_delimiter.join(["log_type", "log_code", "log_detail", "scenario", "context_id", "log_time", "log_message", "\n"])
+    csv_headers = csv_delimiter.join(["log_type", "log_code", "log_detail", "scenario", "context_id", "log_time", "log_message"])
 
     def __init__(self, log_codes=[], log_detail=10, log_file="log.txt", log_all=False, restart_log_file=True):
         self.log_file = log_file
@@ -62,10 +62,10 @@ class log():
         for value in log_values:
             console_log_string += "[" + value + "]"
 
-        console_log_string += log.newline
+        console_log_string
         csv_log_string = log.csv_delimiter.join(log_values) + log.newline
 
-        if (log_code in self.log_codes and log_detail <= self.log_detail) or log_override or self.log_all:
+        if (log_code in self.log_codes and log_detail <= self.log_detail) or log_override or self.log_all or log_type == "ERROR":
             self.log_history.append(console_log_string)
             print(console_log_string)
             if log_to_file:
@@ -117,10 +117,7 @@ log_codes = [
     "Server",
     "RDBMS",
     "Client",
-    "Game",
-    "Player",
-    "Event",
     "CurrentDev"
 ]
 
-log_handler = log(log_codes=log_codes, log_detail=3, log_file="2016-06-18Log.txt")
+log_handler = log(log_codes=log_codes, log_detail=5, log_file="2016-06-18Log.txt", log_all=True)

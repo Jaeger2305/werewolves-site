@@ -1,5 +1,0 @@
-log_type|log_code|log_detail|scenario|context_id|log_time|log_message|
-INFO|CurrentDev|1|werewolves_game.server_scripting.game.Game.remove_player||2016-06-19 17:23:47.878496|Initiating game deletion in 10 seconds.|
-
-INFO|CurrentDev|1|werewolves_game.server_scripting.game.Game.remove_player||2016-06-19 17:24:06.230545|Initiating game deletion in 10 seconds.|
-

@@ -97,7 +97,10 @@ class User:
         self.location = redis_player['location']
         self.name = redis_player['name']
         self.g_history = (redis_player['g_history']).split("|")
-        
+        # optional
+        if 'g_id' in redis_player:
+            self.g_id = redis_player['g_id']
+
         return True
 
     def save(self):
@@ -105,6 +108,9 @@ class User:
         ww_redis_db.hset("player_list:"+self.p_id, "name", self.name)
         ww_redis_db.hset("player_list:"+self.p_id, "location", self.location)
         ww_redis_db.hset("player_list:"+self.p_id, "g_history", ("|").join(self.g_history))
+        # optional
+        if hasattr(self, 'g_id'):
+            ww_redis_db.hset("player_list:"+self.p_id, "g_id", self.g_id)
 
         self.session.save()
 
@@ -116,6 +122,12 @@ class User:
             user_json['name'] = self.name
 
         return json.dumps(user_json, default=lambda o: o.__dict__, sort_keys=True, indent=4)
+
+    def is_ingame(self):
+        if self.location == "ingame":
+            return True
+        else:
+            return False
 
     # redundant
     def push_message(self, **kwargs):
@@ -314,46 +326,38 @@ class Player(User):
     def set_info(self):
         raise NotImplementedError
 
-    def leave_game(self, **kwargs):
-        result = {}
-
-        if 'g_id' in kwargs:
-            player_game = wwss.game.Game(kwargs['g_id'])
-        elif 'g_id' in self.session:
-            player_game = wwss.game.Game(self.session['g_id'])
-
-            log_type    = "INFO"
-            log_code    = "Player"
-            log_message = "g_id was passed via session and not via kwargs"
-            log_detail  = 7
-            context_id  = self.p_id
-
-            log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
-        elif self.session.has_key("location") and self.session['location'] == "outgame":
-            result['error'] = "Player not currently in a game."
-            return result
-        else:
-            result['error'] = "Game not found"
-            return result
-
-        if self.p_id in player_game.players:
-            player_game.remove_player(leaving_player=self)
-            
-            result['response'] = "Player removed from game"
-        else:
-            result['error'] = "Player not found in game: "+player_game.g_id
-        
-        if 'g_id' in self.session:
-            self.session['location'] = "outgame"
-            #self.session.pop('g_id', None)
-            self.session.save()
-
-        result['g_id'] = player_game.g_id
+    def join_game(self, g_id):
+        self.location = "ingame"
+        self.session['location'] = "ingame"
+        self.g_id = g_id
+        self.session['g_id'] = g_id
 
         self.save()
 
-        return result
+        log_handler.log(
+            log_type        = "INFO",
+            log_code        = "Player",
+            log_message     = "Updating player location to reflect joining game",
+            log_detail      = 6,
+            context_id      = self.p_id
+        )
 
+    def leave_game(self):
+        self.session['location'] = "outgame"
+        self.location = "outgame"
+        self.g_history.append(self.g_id)    # this should really have a timestamp
+
+        self.save()
+
+        log_handler.log(
+            log_type        = "INFO",
+            log_code        = "Player",
+            log_message     = "Updating player location to reflect leaving game",
+            log_detail      = 6,
+            context_id      = self.p_id
+        )
+
+    # redundant? Shouldn't it always be called from within the game class?
     def find_game(self, **kwargs):
         found_game = False
         if (
@@ -392,9 +396,9 @@ class Player(User):
                 for g_key in g_list:
                     g_id = str(g_key.decode("utf-8")).split(":")[1]
                     joining_game = wwss.game.Game(g_id)
-                    if len(joining_game.players) < 10:
+                    if len(joining_game.players) < joining_game.max_players:
                         joining_game.add_player(joining_player=self)
-                        
+
                         found_game = True
                         result['text'] = "found most space game"
                         break
@@ -414,10 +418,7 @@ class Player(User):
             # populate with members
             result['text'] += ". Populated with AI."
 
-        self.g_id = joining_game.g_id
-        self.location = "ingame"
-        self.session['g_id'] = self.g_id
-        self.session['location'] = "ingame"
+        self.join_game(joining_game.g_id)
 
         result['g_id'] = self.session['g_id']
         result['p_id'] = self.session['p_id']
