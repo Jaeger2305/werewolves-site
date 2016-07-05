@@ -80,12 +80,27 @@ function Game(gameJson, g_id, players, state) {
         this.players.push(new Player(players[playerJson]));
     }
 
-    if ($.inArray(activeUser.p_id, gameJson.players)) {
+    this.event_queue = []
+    for (var refresh_event_queue_json in newGame.event_queue) {
+        this.event_queue.push(new Event(newGame.event_queue[refresh_event_queue_json], this))
+    }
+
+    this.event_history = []
+    for (var refresh_event_history_json in newGame.event_history) {
+        this.event_history.push(new Event(newGame.event_history[refresh_event_history_json], this))
+    }
+
+    if ($.inArray(activeUser.p_id, newGame.players)) {
         gameManager.makeActiveGame(this.g_id)
     }
 }
 
 Game.prototype.update = function (gameJson) {
+    if (typeof (gameJson) === "string")     // fails if string created as object, better than nothing
+        newGame = JSON.parse(gameJson);
+    else {
+        newGame = gameJson      // more appropriate naming
+    }
     if ('g_id' in gameJson) { this.g_id = gameJson.g_id; }
     if ('state' in gameJson) { this.state = gameJson.state; }
     if ('g_round' in gameJson) { this.g_round = gameJson.g_round; }
@@ -97,18 +112,18 @@ Game.prototype.update = function (gameJson) {
             this.players.push(new Player(gameJson.players[refresh_player_json]));
         }
     }
-    //if ('event_history' in json) {
-    //    this.event_history = []
-    //    for (var refresh_event_history_json in json.event_history) {
-    //        this.event_history.push(new Event(refresh_event_history_json))
-    //    }
-    //}
-    //if ('event_queue' in json) {
-    //    this.event_queue = []
-    //    for (var refresh_event_queue_json in json.event_queue) {
-    //        this.event_queue.push(new Event(refresh_event_queue_json))
-    //    }
-    //}
+    if ('event_history' in gameJson) {
+        this.event_history = []
+        for (var refresh_event_history_json in gameJson.event_history) {
+            this.event_history.push(new Event(newGame.event_history[refresh_event_history_json], this))
+        }
+    }
+    if ('event_queue' in gameJson) {
+        this.event_queue = []
+        for (var refresh_event_queue_json in gameJson.event_queue) {
+            this.event_queue.push(new Event(newGame.event_queue[refresh_event_queue_json], this))
+        }
+    }
     if ($.inArray(activeUser.p_id, gameJson.players)) {
         gameManager.makeActiveGame(this.g_id)
     }
@@ -121,14 +136,95 @@ Game.prototype.addPlayer = function (playerJson) {
     }
 }
 
-// work in progress
-Game.prototype.getGroup = function (selectors) {
-    //var groupList = this.players;
-    //for (var selector in selectors) {
-    //    if (selector === "uuid") {
-    //
-    //    }
+// example call:
+    //var p_ids = Object.keys(newEvent.subjects);
+    //for (var i = p_ids.length - 1; i >= 0; i--) {
+    //    this.subjects.push(parentGame.getIndividuals(selectionPool = parentGame.players, filters = [p_ids[i]], expectedCount = 1));
     //}
+Game.prototype.getGroups = function (groupsOfFilters, expectedCount) {
+    var selectionPool = this.players;   // the pool of players to select from
+    var selectedPlayers = [];   // the results of a single filterGroup
+    var groupList = []; // the list of players returned after combining all of the groups after they have been filtered
+
+    for (var i = groupsOfFilters.length - 1; i >= 0; i--) {
+        selectedPlayers = this.getIndividuals(selectionPool = selectionPool, filters = groupsOfFilters[i]);
+        for (var j = selectedPlayers.length - 1; j >= 0; j--) {
+            if ($.inArray(selectedPlayers[j]) > -1) {
+                groupList.push(selectedPlayers[j]);
+            }
+        }
+    }
+
+    if (typeof expectedCount !== "undefined") {
+        if (expectedCount !== groupList.length) {
+            throw "Expected group size (" + String(expectedCount) + ") doesn't match the amount that was retrieved by the filters (" + String(groupList.length) + ").";
+        }
+        else if (expectedCount === 1) {
+            return groupList[0];            // if you know you're expecting one, return it
+        }
+    }
+
+    return groupList;
+}
+
+// might need a dict to enforce which selection it should be
+Game.prototype.getIndividuals = function (selectionPool, filters, expectedCount) {
+    if (typeof selectionPool === "undefined") {
+        selectionPool = this.players;
+    }
+    /*******************************************************************************************************************
+    * Loop through player list and apply all filters
+    *******************************************************************************************************************/
+    groupList = selectionPool;
+    for (var i = filters.length - 1; i >= 0; i--) {
+        if (groupList.length === 0) {
+            return groupList;   // if no results turn up after the first filter is applied, give up immediately
+        }
+
+        var filteredGroup = []; // variable used to temporarily store players that match the current filter
+
+                                                            /***********************************************************
+                                                            * Filter based on player.state
+                                                            ***********************************************************/
+        if ($.inArray(filters[i], ["alive", "dead", "dying"]) > -1) {
+            filteredGroup = [];
+            for (var j = groupList.length - 1; j >= 0; j--) {
+                if (groupList[j].state === filters[i]) {
+                    filteredGroup.push(groupList[j])
+                }
+            }
+            groupList = filteredGroup;
+        }
+                                                            /***********************************************************
+                                                            * Filter based on last event unnecessary for JS?
+                                                            ***********************************************************/
+
+                                                            /***********************************************************
+                                                            * Filter based on player.character
+                                                            ***********************************************************/
+        if ($.inArray(filters[i], ["werewolf", "human", "witch", "mystic"]) > -1){
+            filteredGroup = [];
+            for (var j = groupList.length - 1; j >= 0; j--) {
+                if (groupList[j].character === filters[i]){
+                    filteredGroup.push(groupList[j]);
+                }
+            }
+            groupList = filteredGroup;
+        }
+                                                            /***********************************************************
+                                                            * Filter based on p_id (regex)
+                                                            ***********************************************************/
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(filters[i])){
+            filteredGroup = [];
+            for (var j = groupList.length - 1; j >= 0; j--){
+                if (groupList[j].p_id === filters[i]){
+                    filteredGroup.push(groupList[j]);
+                }
+            }
+            groupList = filteredGroup;
+        }
+    }
+    return groupList;
 }
 
 Game.prototype.display = function(){
@@ -145,110 +241,3 @@ Game.prototype.display = function(){
         );
     }
 }
-
-/***********************************************************************************************************************
-* User methods
-***********************************************************************************************************************/
-function User(userJson) {
-    if (typeof (userJson) === "string") {
-        userJson = JSON.parse(userJson)
-    }
-    this.location = userJson.location;
-    this.p_id = userJson.p_id;
-    if ('g_id' in userJson) {
-        this.g_id = userJson.g_id;    // unnecessary/unused?
-    }
-    else {
-        this.g_id = null;
-    }
-}
-
-/***********************************************************************************************************************
-* Player methods
-***********************************************************************************************************************/
-function Player(playerJson) {
-    // ensure json is parsed
-    if (typeof (playerJson) === "string") {
-        playerJson = JSON.parse(playerJson)
-    }
-    
-    this.p_id = playerJson.p_id;
-    this.name = playerJson.name;
-    this.state = playerJson.state;
-    this.character = playerJson.character;
-}
-
-Player.prototype.update = function (playerJson) {
-    if ('p_id' in playerJson) { this.p_id = playerJson.p_id; }
-    if ('name' in playerJson) { this.name = playerJson.name; }
-    if ('state' in playerJson) { this.state = playerJson.state; }
-    if ('character' in playerJson) { this.character= playerJson.character; }
-}
-
-
-                                                            /***********************************************************
-                                                            * Message methods
-                                                            ***********************************************************/
-Player.prototype.message = function(msg, targetPID){
-    parameters = {"msg":msg, "target":targetPID, "session_key": session_key};
-    swampdragon.callRouter('messaging', 'lobby', parameters, function(context, data){
-        console.log(data);
-        $('#server_updates').prepend("<div class='message'>"+data+"</div>");
-    });
-}
-
-Player.prototype.receive_message = function(msg, sender, target, time){
-    var constructed = "";
-    constructed = "<div class=message_target_"+target+">["+time+"] "+sender+": "+msg+"</div>";
-    $("#chatbox_read").append(constructed);
-}
-
-
-
-/***********************************************************************************************************************
-* Global variables
-***********************************************************************************************************************/
-var gameManager = new GameManager();
-
-var activeUser; // initialised in swampdragon init router call
-
-var selected_players = [];
-
-
-/***********************************************************************************************************************
-* Plugins and snippets
-***********************************************************************************************************************/
-// credit to adamb http://stackoverflow.com/a/13866517/2276412
-// makes a span editable on double click
-$.fn.extend({
-    editable: function() {
-        var that = this,
-            $edittextbox = $('<input type="text"></input>').css('min-width', that.width()),
-            submitChanges = function() {
-                that.html($edittextbox.val());
-                that.show();
-                that.trigger('editsubmit', [that.html()]);
-                $(document).off('click', submitChanges);
-                $edittextbox.detach();
-            },
-            tempVal;
-        $edittextbox.click(function(event) {
-            event.stopPropagation();
-        });
-
-        that.dblclick(function(e) {
-            tempVal = that.html();
-            $edittextbox.val(tempVal).insertBefore(that).off("keypress").on('keypress', function(e) {
-                if ($(this).val() !== '') {
-                    var code = (e.keyCode ? e.keyCode : e.which);
-                    if (code == 13) {
-                        submitChanges();
-                    }
-                }
-            });
-            that.hide();
-            $(document).one("click", submitChanges);
-        });
-        return that;
-    }
-});

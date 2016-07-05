@@ -26,30 +26,30 @@ class EventFactory():
         if e_type == "night":
             return Event(   
                             g_id,
-                            [player.p_id for player in parent_game.get_group([wwss.characters.Werewolf, "alive"])],
-                            [player.p_id for player in parent_game.get_group([wwss.characters.Human, "alive"])],
+                            [player.p_id for player in parent_game.get_groups([wwss.characters.Werewolf, "alive"])],
+                            [player.p_id for player in parent_game.get_groups([wwss.characters.Human, "alive"])],
                             cls.lookup_action(e_type), e_type
                         )
         if e_type == "day":
             return Event(
                             g_id,
-                            [player.p_id for player in parent_game.get_group([wwss.characters.Character, "alive"])],
-                            [player.p_id for player in parent_game.get_group([wwss.characters.Character, "alive"])],
+                            [player.p_id for player in parent_game.get_groups([wwss.characters.Character, "alive"])],
+                            [player.p_id for player in parent_game.get_groups([wwss.characters.Character, "alive"])],
                             cls.lookup_action(e_type), e_type
                         )
         if e_type == "dying":
             return Event(
                             g_id,
-                            [player.p_id for player in parent_game.get_group([wwss.characters.Witch, "alive"])],
-                            [player.p_id for player in parent_game.get_group(["dead", "last_event"])],
+                            [player.p_id for player in parent_game.get_groups([wwss.characters.Witch, "alive"])],
+                            [player.p_id for player in parent_game.get_groups(["dead", "last_event"])],
                             cls.lookup_action(e_type), e_type
                         )
         if e_type == "witch_save":
             raise NotImplementedError
             return Event(
                             g_id,
-                            [player.p_id for player in parent_game.get_group([wwss.characters.Human])],
-                            [player.p_id for player in parent_game.get_group([wwss.characters.Witch])],
+                            [player.p_id for player in parent_game.get_groups([wwss.characters.Human])],
+                            [player.p_id for player in parent_game.get_groups([wwss.characters.Witch])],
                             cls.lookup_action(e_type),
                             e_type
                         )
@@ -57,8 +57,8 @@ class EventFactory():
             raise NotImplementedError
             return Event(
                             g_id,
-                            [player.p_id for player in parent_game.get_group([wwss.characters.Character])],
-                            [player.p_id for player in parent_game.get_group([wwss.characters.Witch])],
+                            [player.p_id for player in parent_game.get_groups([wwss.characters.Character])],
+                            [player.p_id for player in parent_game.get_groups([wwss.characters.Witch])],
                             cls.lookup_action(e_type),
                             e_type
                         )
@@ -137,9 +137,9 @@ class Event():
         # subjects = [wwss.characters.CharacterFactory.create_character(character=None, p_id=p_id) for p_id in subjects]
         # result_subjects = [wwss.characters.CharacterFactory.create_character(character=None, p_id=p_id) for p_id in result_subjects]
 
-        #instigators = [self.game.get_group(p_id)[0] for p_id in instigators]
-        #subjects = [self.game.get_group(p_id)[0] for p_id in subjects]
-        #result_subjects = [self.game.get_group(p_id)[0] for p_id in result_subjects]
+        #instigators = [self.game.get_groups(p_id)[0] for p_id in instigators]
+        #subjects = [self.game.get_groups(p_id)[0] for p_id in subjects]
+        #result_subjects = [self.game.get_groups(p_id)[0] for p_id in result_subjects]
         if redis_event["votes"]:        
             votes = redis_event["votes"].split("|")
 

@@ -138,3 +138,38 @@
     </Snippet>  
   </CodeSnippet>
 </CodeSnippets>
+
+
+<?xml version="1.0" encoding="utf-8"?>
+<CodeSnippets xmlns="http://schemas.microsoft.com/VisualStudio/2005/CodeSnippet">
+  <CodeSnippet Format="1.0.0">
+    <Header>
+      <SnippetTypes>
+        <SnippetType>Expansion</SnippetType>
+      </SnippetTypes>
+      <Title>optionalParam</Title>
+      <Author>Richard</Author>
+      <Description>
+      </Description>
+      <HelpUrl>
+      </HelpUrl>
+      <Shortcut>optionalParamTest</Shortcut>
+    </Header>
+    <Snippet>
+      <Declarations>
+        <Literal Editable="true">
+          <ID>optionalParam</ID>
+          <ToolTip>The parameter you want to test whether it has been passed in</ToolTip>
+          <Default>optionalParam</Default>
+          <Function>
+          </Function>
+        </Literal>
+      </Declarations>
+      <Code Language="javascript" Delimiter="$">
+        <![CDATA[if (typeof $optionalParam$ !== "undefined") {
+    
+}]]>
+      </Code>
+    </Snippet>
+  </CodeSnippet>
+</CodeSnippets>

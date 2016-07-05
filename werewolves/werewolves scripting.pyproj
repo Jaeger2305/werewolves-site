@@ -37,8 +37,12 @@
     <Content Include="werewolves_game\static\werewolves_game\images\BG.jpg" />
     <Content Include="werewolves_game\static\werewolves_game\javascript\event.js" />
     <Content Include="werewolves_game\static\werewolves_game\javascript\game.js" />
+    <Content Include="werewolves_game\static\werewolves_game\javascript\game_init.js" />
     <Content Include="werewolves_game\static\werewolves_game\javascript\jquery-1.11.3.js" />
+    <Content Include="werewolves_game\static\werewolves_game\javascript\player.js" />
+    <Content Include="werewolves_game\static\werewolves_game\javascript\plugins.js" />
     <Content Include="werewolves_game\static\werewolves_game\javascript\session.js" />
+    <Content Include="werewolves_game\static\werewolves_game\javascript\user.js" />
     <Content Include="werewolves_game\static\werewolves_game\jquery-1.11.3.js" />
     <Content Include="werewolves_game\static\werewolves_game\style.css" />
     <Content Include="werewolves_game\static\werewolves_game\stylesheets\style.css" />

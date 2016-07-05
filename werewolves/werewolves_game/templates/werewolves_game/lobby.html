@@ -2,123 +2,143 @@
 
 <!DOCTYPE html>
 <html>
+    <head>
+        <link rel="stylesheet" type="text/css" href="{% static 'werewolves_game/stylesheets/style.css' %}" />
+        <script type="text/javascript" src="{% static 'werewolves_game/javascript/jquery-1.11.3.js' %}"></script>
+        <script type="text/javascript" src="{% static 'werewolves_game/javascript/plugins.js' %}"></script>
+        <script type="text/javascript" src="{% static 'werewolves_game/javascript/game.js' %}"></script>
+        <script type="text/javascript" src="{% static 'werewolves_game/javascript/event.js' %}"></script>
+        <script type="text/javascript" src="{% static 'werewolves_game/javascript/player.js' %}"></script>
+        <script type="text/javascript" src="{% static 'werewolves_game/javascript/user.js' %}"></script>
 
-<link rel="stylesheet" type="text/css" href="{% static 'werewolves_game/stylesheets/style.css' %}" />
-<script type="text/javascript" src="{% static 'werewolves_game/javascript/jquery-1.11.3.js' %}"></script>
-<script type="text/javascript" src="{% static 'werewolves_game/javascript/game.js' %}"></script>
+        <script type="text/javascript" src="{% static 'werewolves_game/javascript/game_init.js' %}"></script>
+        <script type="text/javascript" src="{% static 'werewolves_game/javascript/session.js' %}"></script>
 
-<script>$.ajax({
-    crossDomain: true,
-    dataType: "script",
-    url:"{% static 'werewolves_game/javascript/swampdragon_init.js' %}",
-});
-</script>
-<script>$.ajax({
-    crossDomain: true,
-    dataType: "script",
-    url: "{% static 'werewolves_game/javascript/swampdragon_listener.js' %}"
-});
-</script>
 
-<script type="text/javascript" src="{% static 'werewolves_game/javascript/session.js' %}"></script>
+        <script>$.ajax({
+            crossDomain: true,
+            dataType: "script",
+            url:"{% static 'werewolves_game/javascript/swampdragon_init.js' %}",
+        });
+        </script>
+        <script>$.ajax({
+            crossDomain: true,
+            dataType: "script",
+            url: "{% static 'werewolves_game/javascript/swampdragon_listener.js' %}"
+        });
+        </script>
 
-<h1>Werewolves the game</h1>
+        <title>Werewolves Game Lobby</title>
+    </head>
+    <body>
 
-<div class="general_container">
-	<div id="game_lobby">
-		<table id="game_list">
-			<tr><td>Name</td><td>Allegiance</td></tr>
-		</table>
-	</div>
-</div>
+        <h1>Werewolves the game</h1>
 
-<div class="general_container">
-	<div id="player_lobby">
-		<table id="player_list">
-			<tr><td>Name</td><td>Allegiance</td></tr>
-		</table>
-	</div>
-</div>
+        <div class="general_container">
+            <div id="game_lobby">
+                <table id="game_list">
+                    <tr><td>Name</td><td>Allegiance</td></tr>
+                </table>
+            </div>
+        </div>
 
-<div class="general_container">
-	<div id="chatbox_container">
-		<div id="chatbox_read">
-			Chat history
-		</div>
-		<div id="chatbox_write">
-			<select id="chatbox_target_list">
-				<option value="game">Game</option>
-				<option value="player">Player</option>
-				<option value="world" selected="selected">World</option>
-				<option></option>
-			</select>
-			<span id="chatbox_target">target</span>
-			<span id="chatbox_target_id"></span>
-			<span id="chatbox_msg">msg</span>
-		</div>
-	</div>
-</div>
+        <div class="general_container">
+            <div id="player_lobby">
+                <table id="player_list">
+                    <tr><td>Name</td><td>Allegiance</td></tr>
+                </table>
+            </div>
+        </div>
 
-<div class="general_container">
-	<div id="server_updates"></div>
-</div>
+        <div class="general_container">
+            <div id="chatbox_container">
+                <div id="chatbox_read">
+                    Chat history
+                </div>
+                <div id="chatbox_write">
+                    <select id="chatbox_target_list">
+                        <option value="game">Game</option>
+                        <option value="player">Player</option>
+                        <option value="world" selected="selected">World</option>
+                        <option></option>
+                    </select>
+                    <span id="chatbox_target">target</span>
+                    <span id="chatbox_target_id"></span>
+                    <span id="chatbox_msg">msg</span>
+                </div>
+            </div>
+        </div>
 
-<div class="general_container">
-    <textarea rows="4" cols="60" id="server_commands">input commands here</textarea>
-    <div class="button" id="quick_match">Quick match</div>
-    <div class="button" id="leave_match">leave_match</div>
-    <div class="button" id="flush_db">Flush DB/session</div>
-    <div class="button" id="broadcast_games">Broadcast games</div>
-    <div class="button" id="add_vote">add vote</div>
-    <div class="button" id="test_game">test game</div>
-    <div class="button" id="ask_update">ask_update</div>
-    <div class="button" id="ask_shallow_update">ask_shallow_update</div>
-    <div class="button" id="gain_info">gain_info</div>
-    <div class="button" id="lose_info">lose_info</div>
-    <div class="button" id="create_game">create_game</div>
-</div>
+        <div class="general_container">
+	        <div id="server_updates"></div>
+        </div>
 
-<div class="hidden">
-	<div id="sessionID">{{ response }}</div>
-</div>
+        <div class="general_container">
+            <textarea rows="4" cols="60" id="server_commands">input commands here</textarea>
+            <div class="button" id="quick_match">Quick match</div>
+            <div class="button" id="leave_match">leave_match</div>
+            <div class="button" id="flush_db">Flush DB/session</div>
+            <div class="button" id="broadcast_games">Broadcast games</div>
+            <div class="button" id="add_vote">add vote</div>
+            <div class="button" id="test_game">test game</div>
+            <div class="button" id="ask_update">ask_update</div>
+            <div class="button" id="ask_shallow_update">ask_shallow_update</div>
+            <div class="button" id="gain_info">gain_info</div>
+            <div class="button" id="lose_info">lose_info</div>
+            <div class="button" id="create_game">create_game</div>
+        </div>
 
-{% swampdragon_settings %}
-<script type="text/javascript" src="{% static 'swampdragon/js/dist/swampdragon.min.js' %}"></script>
-<script type="text/javascript" src="{% static 'swampdragon/js/dist/datamapper.js' %}"></script>
+        <div class="general_container">
+            <div id="event_lobby">
+                <table id="event_list">
+                    <tr><td>Events!</td><td>Allegiance</td></tr>
+                </table>
+            </div>
+        </div>
 
-<script>
-console.log("working");
+        <div class="hidden">
+            <div id="sessionID">{{ response }}</div>
+        </div>
 
-session_key = "{{ response }}";
+        {% swampdragon_settings %}
+        <script type="text/javascript" src="{% static 'swampdragon/js/dist/swampdragon.min.js' %}"></script>
+        <script type="text/javascript" src="{% static 'swampdragon/js/dist/datamapper.js' %}"></script>
 
-<!-- Swampdragon -->
+        <script>
+            // init variables
+            console.log("working");
 
-$("#chatbox_target_list").change(function(){
-	$("#chatbox_target").html($("#chatbox_target_list").val());
-});
+            session_key = "{{ response }}";
 
-$("#chatbox_msg").editable().on('editsubmit', function (event, val) {
-    var parameters = {};
+            // chat initialisation
+            $("#chatbox_target_list").change(function(){
+                $("#chatbox_target").html($("#chatbox_target_list").val());
+            });
 
-    var target = $("#chatbox_target_list").val();
+            $("#chatbox_msg").editable().on('editsubmit', function (event, val) {
+                var parameters = {};
 
-    if ($("#chatbox_target_id").children().length == 0)
-    	parameters['id'] = $("#chatbox_target_id").html();
+                var target = $("#chatbox_target_list").val();
 
-    parameters['target'] = target;
-    parameters['msg'] = val;
-    parameters['session_key'] = session_key;
-    parameters['time'] = new Date().toJSON().slice(0,10);
+                if ($("#chatbox_target_id").children().length == 0)
+                    parameters['id'] = $("#chatbox_target_id").html();
 
-	swampdragon.callRouter('messaging', 'lobby', parameters, function(context, data){
-		console.log("message pushed locally: "+data);
-	});
+                parameters['target'] = target;
+                parameters['msg'] = val;
+                parameters['session_key'] = session_key;
+                parameters['time'] = new Date().toJSON().slice(0,10);
+
+                swampdragon.callRouter('messaging', 'lobby', parameters, function(context, data){
+                    console.log("message pushed locally: "+data);
+                });
     
-});
+            });
 
-<!-- Session -->
-pulse_handler();
+            // Session initialisations
+            pulse_handler();
 
-</script>
+        </script>
+
+    </body>
 
 </html>

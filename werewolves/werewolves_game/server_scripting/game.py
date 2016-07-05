@@ -422,8 +422,13 @@ class Game:
     # filters the players out of the json array dependent on a players knows_about dict
     def filter_JSON(self, game_json, filters):
         players_json = {}
+        get_individuals_filters = []
 
-        knows_about = self.get_group(list(filters.keys()))
+        for filter_p_ids, filters_to_apply in filters.items():
+            get_individuals_filters.append([filter_p_ids])    # convert to a list of individual filters
+
+        # Obtain all players that are in this game_json
+        knows_about = self.get_groups(get_individuals_filters, expected_count=len(get_individuals_filters))
 
         for player in knows_about:
             if player.p_id in filters:
@@ -503,10 +508,13 @@ class Game:
         )
         return self.players
 
-    def get_group(self, selectors, expected_count=None):
+    def get_groups(self, selectors, expected_count=None):
         """
             Selectors is a list of lists. Each list should contribute to the overall returned group, and each item within the list is used to filter the selection pool.
             Filters can be strings, class objects, or uuids.
+            Selectors is a list. Each list is used to retrieve individuals according to the filter list supplied within. This allows you to build up a group with different filters.
+            The following selectors retrieve all the alive werewolves and all the dead witches.
+            [["alive", Werewolf], ["dead", Witch]]
         """
         selection_pool = self.get_players() # get all players in the game
         group_list = []
@@ -530,7 +538,7 @@ class Game:
                                                             # Build up group using the filters
                                                             ############################################################
         for filters in selectors:
-            selected_list = self.filter_group(group_list=selection_pool, filters=filters)
+            selected_list = self.get_individuals(selection_pool=selection_pool, filters=filters)
             for player in selected_list:
                 if player not in group_list:
                     group_list.append(player)
@@ -543,36 +551,38 @@ class Game:
 
         return group_list
 
-    def filter_group(self, group_list, filters, expected_count=None):
+    def get_individuals(self, selection_pool, filters, expected_count=None):
         """
-            Removes players from the group_list that don't match the filters.
-            Returns the filtered group_list
+            Removes players from the individuals list that doesn't match the filters.
+            Returns a list of individuals that are filtered out of the selection pool
         """
         # loop through Player objects and remove those that don't fit the group as an array
-        if not group_list:
-            group_list = self.get_players()
+        if not selection_pool:
+            selection_pool = self.get_players()
+
+        individuals = selection_pool    # start with all individuals in selection pool
 
         for filter in filters:
-            if not group_list:
-                return group_list
+            if not individuals:
+                return individuals
 
             # selecting based on player.state
             if filter in ("alive", "dead", "dying"):
-                group_list = [player for player in group_list if player.state == filter]
+                individuals = [player for player in individuals if player.state == filter]
 
             # selecting based on last event
             elif filter == "last_event":
                 last_event = event.Event.load(self.g_id, self.event_history[0])
-                group_list = [player for player in group_list if player.p_id in last_event.result_subjects]
+                individuals = [player for player in individuals if player.p_id in last_event.result_subjects]
 
             # selecting based on Class type
             elif inspect.isclass(filter) and issubclass(filter, Character):
-                group_list = [player for player in group_list if isinstance(player, filter)]
+                individuals = [player for player in individuals if isinstance(player, filter)]
 
             # selecting based on uuid string
             elif isinstance(filter, str):
                 if uuid.UUID(filter, version=4):
-                    group_list = [player for player in group_list if player.p_id == filter]
+                    individuals = [player for player in individuals if player.p_id == filter]
 
                     log_type    = "INFO"
                     log_code    = "Game"
@@ -582,7 +592,7 @@ class Game:
 
                     log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
 
-        return group_list
+        return individuals
 
     def assign_roles(self):
         shuffle(self.players)
@@ -653,13 +663,13 @@ class Game:
     def end_game(self):
         # log game into Relational DB
         
-        # remove players from game
-        leaving_players = list(self.players)
-        for p_id in leaving_players:
-            self.remove_player(leaving_p_id=p_id)
-
-        # delete game from redis
-        self.redis_cleanup()
+        ## remove players from game
+        #leaving_players = list(self.players)
+        #for p_id in leaving_players:
+        #    self.remove_player(leaving_p_id=p_id)
+        #
+        ## delete game from redis
+        #self.redis_cleanup()
 
         log_type    = "INFO"
         log_code    = "Game"
@@ -697,7 +707,7 @@ class Game:
             cur_event = self.get_event_queue()[0]
 
             data_dict["subjects"] = []
-            for player in self.get_group(cur_event.subjects):
+            for player in self.get_groups(cur_event.subjects):
                 data_dict["subjects"].append(player.as_JSON())
 
             data_dict["e_type"] = cur_event.e_type
@@ -836,10 +846,10 @@ class Game:
     def get_winners(self):
         winners = ["humans", "werewolves"]
 
-        if self.get_group([Human, "alive"]):
+        if self.get_groups([Human, "alive"]):
             winners.remove("werewolves")
 
-        if self.get_group([Werewolf, "alive"]):
+        if self.get_groups([Werewolf, "alive"]):
             winners.remove("humans")
 
         return winners
@@ -928,7 +938,7 @@ class Game:
     def remove_player(self, leaving_p_id=None, leaving_player=None):
         try:
             if leaving_p_id:
-                leaving_player = self.get_group([leaving_p_id], expected_count=1)
+                leaving_player = self.get_groups([leaving_p_id], expected_count=1)
                 log_handler.log(
                     log_type        = "WARNING",
                     log_code        = "Game",
@@ -938,7 +948,7 @@ class Game:
                 )
             else:
                 leaving_p_id = leaving_player.p_id
-                leaving_player = self.get_group([leaving_p_id], expected_count=1)
+                leaving_player = self.get_groups([leaving_p_id], expected_count=1)
         except AssertionError:
             log_handler.log(
                 log_type        = "ERROR",
