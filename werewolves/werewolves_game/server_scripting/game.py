@@ -671,13 +671,21 @@ class Game:
         ## delete game from redis
         #self.redis_cleanup()
 
-        log_type    = "INFO"
-        log_code    = "Game"
-        log_message = "Game has ended and been deleted from Redis memory"
-        log_detail  = 1
-        context_id  = self.g_id
+        log_handler.log(
+            log_type        = "WARNING",
+            log_code        = "CurrentDev",
+            log_message     = "Game has been left in a finished state to enable debugging after the game has ended. ",
+            log_detail      = 2,
+            context_id      = self.g_id
+        )
 
-        log_handler.log(log_type=log_type, log_code=log_code, log_message=log_message, log_detail=log_detail, context_id=context_id)
+        #log_handler.log(
+        #    log_type        = "INFO",
+        #    log_code        = "Game",
+        #    log_message     = "Game has ended and been deleted from redis memory",
+        #    log_detail      = 1,
+        #    context_id      = self.g_id
+        #)
 
     # publishes data to channels based on current state
     # needs to be complemented by a filter function

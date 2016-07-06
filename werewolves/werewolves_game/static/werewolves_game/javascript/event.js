@@ -78,7 +78,6 @@ Event.prototype.updateSnapshotPlayer = function (playerOld, playerNew, attribute
 }
 
 Event.prototype.display = function () {
-    $("#event_list").html("");
     $("#event_list").append(
         "<tr>" +
             "<td>e_id</td>" +

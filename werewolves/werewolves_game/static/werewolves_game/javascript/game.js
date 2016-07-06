@@ -16,13 +16,13 @@
 * GameManager methods
 ***********************************************************************************************************************/
 function GameManager(){
-    this.games_list = [];
+    this.gameList = [];
     this.activeGame = "";
 }
 
 GameManager.prototype.display = function(){
     $("#game_list, #player_list").html("<table>");
-    for (game of this.games_list){
+    for (game of this.gameList) {
         $("#game_list").append("<tr><td>" + game.g_id + "</td>");
         if (this.activeGame === game.g_id){
             game.display();
@@ -32,18 +32,18 @@ GameManager.prototype.display = function(){
 }
 
 GameManager.prototype.add_game = function(game){
-    this.games_list.push(game);
+    this.gameList.push(game);
 }
 
 GameManager.prototype.remove_game = function(myGame){
-    for (var i = this.games_list.length-1; i >= 0; i--){
+    for (var i = this.gameList.length - 1; i >= 0; i--) {
         if (game.g_id === myGame.g_id)
-            this.games_list.splice(i, 1);
+            this.gameList.splice(i, 1);
     }
 }
 
 GameManager.prototype.find = function(g_id){
-    for (game of this.games_list){
+    for (game of this.gameList) {
         if (game.g_id === g_id)
             return game;
     }
@@ -239,5 +239,15 @@ Game.prototype.display = function(){
                 "<td>" + player.character + "</td>" +
             "</tr>"
         );
+    }
+
+    $("#event_list").html("");
+    for (var event of this.event_queue) {
+        console.log(event);
+        event.display();
+    }
+    for (var event of this.event_history) {
+        console.log(event);
+        event.display();
     }
 }
