@@ -1,0 +1,116 @@
+﻿<!-- INSTRUCTIONS:
+    save these XMLs into separate files at <Program directory>\Microsoft Visual Studio 14.0\Common7\IDE\Extensions\Microsoft\Python Tools for Visual Studio\2.2\Snippets\1033\Python
+-->
+
+<?xml version="1.0" encoding="utf-8"?>
+<CodeSnippets xmlns="http://schemas.microsoft.com/VisualStudio/2005/CodeSnippet">
+  <CodeSnippet Format="1.0.0">
+    <Header>
+      <Title>log</Title>
+      <Shortcut>log</Shortcut>
+      <Description>Code snippet for a log statement</Description>
+      <Author>Richard Webb</Author>
+      <SnippetTypes>
+        <SnippetType>SurroundsWithStatement</SnippetType>
+        <SnippetType>Expansion</SnippetType>
+      </SnippetTypes>
+    </Header>
+    <Snippet>
+      <Declarations>
+        <Literal>
+          <ID>log_type</ID>
+          <ToolTip>What sort of log this is (error, info, warning)</ToolTip>
+          <Default>INFO</Default>
+        </Literal>
+        <Literal>
+          <ID>log_code</ID>
+          <ToolTip>An area of the program that this log refers to (eg. redis, server, development)</ToolTip>
+          <Default>CurrentDev</Default>
+        </Literal>
+		<Literal>
+          <ID>log_message</ID>
+          <ToolTip>Log details</ToolTip>
+          <Default>LogDetails</Default>
+        </Literal>
+        <Literal>
+          <ID>log_detail</ID>
+          <ToolTip>How useful or detailed this information is for the flow of the program (lower is broader overview)</ToolTip>
+          <Default>3</Default>
+        </Literal>
+        <Literal>
+          <ID>context_id</ID>
+          <ToolTip>Optional ID of the object calling the log</ToolTip>
+          <Default>None</Default>
+        </Literal>
+      </Declarations>
+      <Code Language="Python"><![CDATA[log_handler.log(
+    log_type        = "$log_type$",
+    log_code        = "$log_code$",
+    log_message     = "$log_message$",
+    log_detail      = $log_detail$,
+    context_id      = $context_id$
+)]]></Code>
+    </Snippet>  
+  </CodeSnippet>
+</CodeSnippets>
+
+
+
+<?xml version="1.0" encoding="utf-8"?>
+<CodeSnippets xmlns="http://schemas.microsoft.com/VisualStudio/2005/CodeSnippet">
+  <CodeSnippet Format="1.0.0">
+    <Header>
+      <Title>tab0</Title>
+      <Shortcut>tab0</Shortcut>
+      <Description>Comment block that stretches across the page</Description>
+      <Author>Richard Webb</Author>
+      <SnippetTypes>
+        <SnippetType>SurroundsWithStatement</SnippetType>
+        <SnippetType>Expansion</SnippetType>
+      </SnippetTypes>
+    </Header>
+    <Snippet>
+      <Declarations>
+        <Literal>
+          <ID>comment</ID>
+          <ToolTip>The comment you want to make.</ToolTip>
+          <Default>Comment_goes_here</Default>
+        </Literal>
+      </Declarations>
+      <Code Language="Python"><![CDATA[$ $
+########################################################################################################################
+# $comment$
+########################################################################################################################]]></Code>
+</Snippet>  
+</CodeSnippet>
+</CodeSnippets>
+
+
+<?xml version="1.0" encoding="utf-8"?>
+<CodeSnippets xmlns="http://schemas.microsoft.com/VisualStudio/2005/CodeSnippet">
+  <CodeSnippet Format="1.0.0">
+    <Header>
+      <Title>tab60</Title>
+      <Shortcut>tab60</Shortcut>
+      <Description>Comment block that appears 60 characters in from the left.</Description>
+      <Author>Richard Webb</Author>
+      <SnippetTypes>
+        <SnippetType>SurroundsWithStatement</SnippetType>
+        <SnippetType>Expansion</SnippetType>
+      </SnippetTypes>
+    </Header>
+    <Snippet>
+      <Declarations>
+        <Literal>
+          <ID>comment</ID>
+          <ToolTip>The comment you want to make.</ToolTip>
+          <Default>Comment_goes_here</Default>
+        </Literal>
+      </Declarations>
+      <Code Language="Python"><![CDATA[$ $
+                                                            ############################################################
+                                                            # $comment$
+                                                            ############################################################]]></Code>
+    </Snippet>  
+  </CodeSnippet>
+</CodeSnippets>
